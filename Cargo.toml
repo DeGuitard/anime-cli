@@ -1,0 +1,10 @@
+[package]
+name = "anime-cli"
+version = "0.1.0"
+authors = ["Vianney Dupoy de Guitard <vianney@n4v1.com>"]
+edition = "2018"
+
+[dependencies]
+anime_find = { path = "anime_find" }
+anime_dl = { path = "anime_dl" }
+getopts = "0.2.19"
