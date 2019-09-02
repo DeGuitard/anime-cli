@@ -2,10 +2,16 @@
 name = "anime-cli"
 version = "0.1.0"
 authors = ["Vianney Dupoy de Guitard <vianney@n4v1.com>"]
+license = "GPLv3"
 edition = "2018"
+repository = "https://github.com/DeGuitard/anime-cli"
+keywords = ["anime", "streaming", "cli", "xdcc"]
 
 [dependencies]
-anime_find = { path = "anime_find" }
-anime_dl = { path = "anime_dl" }
 getopts = "0.2.19"
+lazy_static = "1.3.0"
 mpv = "0.2"
+pbr = "1.0.1"
+regex = "1"
+reqwest = "0.9.19"
+serde = "1.0.98"

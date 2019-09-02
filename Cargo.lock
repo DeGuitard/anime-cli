@@ -17,25 +17,11 @@ dependencies = [
 name = "anime-cli"
 version = "0.1.0"
 dependencies = [
- "anime_dl 0.1.0",
- "anime_find 0.1.0",
  "getopts 0.2.21 (registry+https://github.com/rust-lang/crates.io-index)",
- "mpv 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "anime_dl"
-version = "0.1.0"
-dependencies = [
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "mpv 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "pbr 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "regex 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "anime_find"
-version = "0.1.0"
-dependencies = [
  "reqwest 0.9.20 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.99 (registry+https://github.com/rust-lang/crates.io-index)",
 ]

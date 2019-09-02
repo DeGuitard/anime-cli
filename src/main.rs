@@ -1,6 +1,6 @@
-extern crate anime_dl;
-extern crate anime_find;
 extern crate mpv;
+mod anime_dl;
+mod anime_find;
 
 use getopts::Options;
 use std::path::Path;
