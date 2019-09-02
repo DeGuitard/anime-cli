@@ -1,11 +1,15 @@
 [package]
 name = "anime-cli"
 version = "0.1.0"
+description = "CLI to find, download and stream anime."
 authors = ["Vianney Dupoy de Guitard <vianney@n4v1.com>"]
-license = "GPLv3"
+license = "GPL-3.0"
 edition = "2018"
+homepage = "https://github.com/DeGuitard/anime-cli"
+documentation = "https://github.com/DeGuitard/anime-cli"
 repository = "https://github.com/DeGuitard/anime-cli"
 keywords = ["anime", "streaming", "cli", "xdcc"]
+categories = ["command-line-utilities"]
 
 [dependencies]
 getopts = "0.2.19"
