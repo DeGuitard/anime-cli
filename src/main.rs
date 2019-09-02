@@ -88,6 +88,10 @@ fn play_video(filename: String) {
                 .to_str()
                 .expect("Expected a string for Path, got None");
             mpv_builder.set_option("osc", true).unwrap();
+            mpv_builder
+                .set_option("input-default-bindings", true)
+                .unwrap();
+            mpv_builder.set_option("input-vo-keyboard", true).unwrap();
             let mut mpv = mpv_builder.build().expect("Failed to build MPV handler");
             mpv.command(&["loadfile", video_path as &str])
                 .expect("Error loading file");
