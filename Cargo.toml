@@ -8,3 +8,4 @@ edition = "2018"
 anime_find = { path = "anime_find" }
 anime_dl = { path = "anime_dl" }
 getopts = "0.2.19"
+mpv = "0.2"

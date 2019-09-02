@@ -33,7 +33,7 @@ struct DCCSend {
     file_size: usize,
 }
 
-pub fn connect_and_download(request: IRCRequest) -> Result<usize, String> {
+pub fn connect_and_download(request: IRCRequest, on_start: fn(String) -> ()) -> Result<(), String> {
     let mut download_handles = Vec::new();
     let mut has_joined = false;
     let mut multi_bar = MultiBar::new();
@@ -62,7 +62,7 @@ pub fn connect_and_download(request: IRCRequest) -> Result<usize, String> {
             let request = parse_dcc_send(&message);
             let mut progress_bar = multi_bar.create_bar(request.file_size as u64);
             let handle = thread::spawn(move || {
-                download_file(request, &mut progress_bar).unwrap();
+                download_file(request, &mut progress_bar, on_start).unwrap();
             });
             download_handles.push(handle);
         }
@@ -72,12 +72,10 @@ pub fn connect_and_download(request: IRCRequest) -> Result<usize, String> {
         .unwrap();
     stream.shutdown(Shutdown::Both).unwrap();
     multi_bar.listen();
-
-    let download_count = download_handles.len();
     download_handles
         .into_iter()
         .for_each(|handle| handle.join().unwrap());
-    Ok(download_count)
+    Ok(())
 }
 
 fn log_in(request: &IRCRequest) -> Result<TcpStream, std::io::Error> {
@@ -116,13 +114,16 @@ fn parse_dcc_send(message: &String) -> DCCSend {
 fn download_file(
     request: DCCSend,
     progress_bar: &mut ProgressBar<Pipe>,
+    on_start: fn(String) -> (),
 ) -> std::result::Result<(), std::io::Error> {
+    let filename = request.filename.to_string();
     let mut file = File::create(&request.filename)?;
     let mut stream = TcpStream::connect(format!("{}:{}", request.ip, request.port))?;
     let mut buffer = [0; 4096];
     let mut progress: usize = 0;
     progress_bar.set_units(Units::Bytes);
     progress_bar.message(&format!("{}: ", &request.filename));
+    on_start(filename);
 
     while progress < request.file_size {
         let count = stream.read(&mut buffer[..])?;

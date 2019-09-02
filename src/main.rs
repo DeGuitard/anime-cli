@@ -1,8 +1,11 @@
 extern crate anime_dl;
 extern crate anime_find;
+extern crate mpv;
 
 use getopts::Options;
+use std::path::Path;
 use std::process::exit;
+use std::thread;
 
 static IRC_SERVER: &str = "irc.rizon.net:6667";
 static IRC_CHANNEL: &str = "nibl";
@@ -56,8 +59,8 @@ fn main() {
         bot: package.bot,
         packages: vec![package.number.to_string()],
     };
-    match anime_dl::connect_and_download(irc_request) {
-        Ok(count) => println!("Downloaded successfuly {} files", count),
+    match anime_dl::connect_and_download(irc_request, play_video) {
+        Ok(_) => exit(0),
         Err(e) => {
             eprintln!("{}", e);
             exit(1);
@@ -73,4 +76,36 @@ fn parse_episode(episode: String) -> u16 {
             exit(1);
         }
     }
+}
+
+fn play_video(filename: String) {
+    thread::spawn(move || {
+        thread::sleep(std::time::Duration::from_secs(5));
+        let video_path: &Path = Path::new(&filename);
+        let mut mpv_builder = mpv::MpvHandlerBuilder::new().expect("Failed to init MPV builder");
+        if video_path.is_file() {
+            let video_path = video_path
+                .to_str()
+                .expect("Expected a string for Path, got None");
+            mpv_builder.set_option("osc", true).unwrap();
+            let mut mpv = mpv_builder.build().expect("Failed to build MPV handler");
+            mpv.command(&["loadfile", video_path as &str])
+                .expect("Error loading file");
+            'main: loop {
+                while let Some(event) = mpv.wait_event(0.0) {
+                    match event {
+                        mpv::Event::Shutdown | mpv::Event::Idle => {
+                            break 'main;
+                        }
+                        _ => {}
+                    };
+                }
+            }
+        } else {
+            eprintln!(
+                "A file is required; {} is not a valid file",
+                video_path.to_str().unwrap()
+            );
+        }
+    });
 }
