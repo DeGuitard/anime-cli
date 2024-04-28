@@ -34,6 +34,8 @@ $ anime-cli -q "Sakamoto Desu ga" -b 12
 
 ## Pre-requisites
 In order to play videos you will need mpv.
+However, if you do not wish to autoplay videos, you can do
+`cargo build --release --no-default-features`
 
 ### Archlinux
 ```
@@ -58,9 +60,8 @@ mpv-1.dll    -> where `anime-cli.exe` is
 When downloading anime, users are subject to country-specific software distribution laws. anime-dl is not designed to enable illegal activity. We do not promote piracy nor do we allow it under any circumstances. You should own an original copy of every content downloaded through this tool. Please take the time to review copyright and video distribution laws and/or policies for your country before proceeding.
 
 ## Todo
-* Support more media viewers such as VLC
+* Support more media viewers such as VLC (if you compile without mpv it'll open in your default media player)
 * Make this work on android
 * A search only function as well as select correct anime from list
 * Make an anime log so you can resume where you left off
-* Fix edge case where a rapid retry will prevent a user from downloading a file because it is queued
-* Add a graphical interface
+* Add a graphical interface (opens a terminal with inputs, close enough)

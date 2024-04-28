@@ -1,3 +1,4 @@
+#[cfg(feature = "mpv")]
 extern crate mpv;
 extern crate term_size;
 
@@ -7,27 +8,69 @@ mod anime_find;
 use getopts::Options;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::ffi::OsStr;
 use std::process::exit;
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::thread;
+use std::io;
 
 use pbr::{MultiBar, Pipe, ProgressBar, Units};
-//use std::slice::Join;
+use std::error::Error;
 
 static IRC_SERVER: &str = "irc.rizon.net:6667";
 static IRC_CHANNEL: &str = "nibl";
 static IRC_NICKNAME: &str = "randomRustacean";
 
+
+const AUDIO_EXTENSIONS: &'static [&'static str] = &["aif", "cda", "mid", "midi", "mp3",
+                                                    "mpa", "ogg", "wav", "wma", "wpl"];
+
+const VIDEO_EXTENSIONS: &'static [&'static str] = &["3g2", "3gp", "avi", "flv", "h264",
+                                                    "m4v", "mkv", "mov", "mp4", "mpg",
+                                                    "mpeg", "rm", "swf", "vob", "wmv"];
+
 fn print_usage(program: &str, opts: Options) {
     let msg = opts.short_usage(&program);
     print!("{}", opts.usage(&msg));
+    println!("\n\
+    ===================================\n\
+    Helpful Tips:                      \n\
+    Try to keep your anime name simple \n\
+    e.g. sakamoto                      \n\
+                                       \n\
+    Common resolutions 480/720/1080    \n\
+                                       \n\
+    Batch end number means last episode\n\
+                                       \n\
+    in a range of episodes             \n\
+      e.g. episode ------------> batch \n\
+      everything from 1 -------> 10    \n\
+                                       \n\
+    You can apply default resolution   \n\
+    and default batch # with a blank   \n\
+    ===================================\n
+    ");
+}
+
+fn get_cli_input(prompt: &str) -> String {
+    println!("{}", prompt);
+    let mut input = String::new();
+    match io::stdin().read_line(&mut input) {
+        Ok(_) => {},
+        Err(e) => {
+            eprintln!("{}", e);
+            eprintln!("Please enter a normal query");
+            exit(1);
+        }
+    }
+    input.to_string().replace(|c: char| c == '\n' || c == '\r', "")
 }
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let program = args[0].clone();
     let mut opts = Options::new();
-    opts.reqopt("q", "query", "Query to run", "QUERY")
+    opts.optopt("q", "query", "Query to run", "QUERY")
         .optopt("e", "episode", "Episode number", "NUMBER")
         .optopt("b", "batch", "Batch end number", "NUMBER")
         .optopt("r", "resolution", "Resolution", "NUMBER")
@@ -54,30 +97,59 @@ fn main() {
         }
     };
 
-    let resolution: Option<u16> = match matches.opt_str("r").as_ref().map(String::as_str) {
-        Some("0") => None,
-        Some(r) => Some(parse_number(String::from(r))),
-        None => Some(720),
-    };
+    let cli = if args.len() > 1 { true } else { false };
 
-    let queryres: String = match resolution {
+    let mut query: String;
+    let resolution: Option<u16>;
+    let episode: Option<u16>;
+    let mut batch: Option<u16>;
+
+    if cli {
+        resolution = match matches.opt_str("r").as_ref().map(String::as_str) {
+            Some("0") => None,
+            Some(r) => Some(parse_number(String::from(r))),
+            None => Some(720),
+        };
+
+        query = matches.opt_str("q").unwrap();
+
+        episode = match matches.opt_str("e") {
+            Some(ep) => Some(parse_number(ep)),
+            None => None
+        };
+
+        batch = matches.opt_str("b").map(|b| parse_number(b));
+
+    } else {
+        println!("Welcome to anime-cli");
+        println!("Default resolution: 720 | episode: 1 | batch = episode");
+        query = get_cli_input("Anime/Movie name: ");
+        resolution =  Some(match parse_number(get_cli_input("Resolution: ")) {
+            0 => 720,
+            r => r,
+        });
+        episode = Some(match parse_number(get_cli_input("Episode number: ")) {
+            0 => 1,
+            e => e,
+        });
+        batch = Some(match parse_number(get_cli_input("Batch Ep End Number: ")) {
+            0 => episode.unwrap(),
+            b => b,
+        });
+    }
+
+    query = query + match resolution {
         Some(x) => format!(" {}", x),
         None => "".to_string(),
-    };
+    }.as_str();
 
-    let query = matches.opt_str("q").unwrap() + queryres.as_str();
-    //println!("{}", query);
-    let episode: Option<u16> = match matches.opt_str("e") {
-        Some(ep) => Some(parse_number(ep)),
-        None => None
-    };
-
-    let mut batch =  matches.opt_str("b").map(|ep|parse_number(ep));
     if batch.is_some() && batch.unwrap() < episode.unwrap_or(1) {
         batch = episode;
     }
+
     let mut dccpackages = vec![];
 
+    let mut num_episodes = 0;
     for i in episode.unwrap_or(1)..batch.unwrap_or(episode.unwrap_or(1)) + 1 {
         if episode.is_some() || batch.is_some() {
             println!("Searching for {} episode {}", query, i);
@@ -85,16 +157,26 @@ fn main() {
             println!("Searching for {}", query);
         }
         match anime_find::find_package(&query, &episode.or(batch).and(Some(i))) {
-            Ok(p) => dccpackages.push(p),
+            Ok(p) => {
+                match Path::new(&p.filename).extension().and_then(OsStr::to_str) {
+                    Some(ext) => {
+                        if !AUDIO_EXTENSIONS.contains(&ext) && !VIDEO_EXTENSIONS.contains(&ext) {
+                            eprintln!("Warning, this is not a media file! Skipping");
+                        } else {
+                            dccpackages.push(p);
+                            num_episodes += 1;
+                        }
+                    },
+                    _ => { eprintln!("Warning, this file has no extension, skipping"); }
+                }
+            },
             Err(e) => {
                 eprintln!("{}", e);
             }
         };
     }
 
-    if dccpackages.len() == 0 {
-        exit(1);
-    }
+    if num_episodes == 0 { exit(1); }
 
     match fs::create_dir(&query) {
         Ok(_) => println!{"Created folder {}", &query},
@@ -162,7 +244,16 @@ fn main() {
 
     let mut video_handle = None;
     if !noshow {
-        video_handle = Some(play_video(dccpackages.into_iter().map(|package| package.filename).collect(), dir_path.clone()));
+        video_handle =
+            if cfg!(feature = "mpv") {
+                Some(play_video(dccpackages.into_iter().map(|package| package.filename).collect(), dir_path.clone()))
+            } else {
+                if num_episodes == 1 { //If we don't have mpv, we'll open the file using default media app. We can't really hook into it so we limit to 1 file so no spam
+                    Some(play_video(dccpackages.into_iter().map(|package| package.filename).collect(), dir_path.clone()))
+                } else {
+                    None
+                }
+            }
     }
 
     match anime_dl::connect_and_download(irc_request, channel_senders, status_bar_sender, dir_path.clone()) {
@@ -233,17 +324,20 @@ fn update_bar(progress_bar: &mut ProgressBar<Pipe>, receiver: Receiver<i64>, sta
     progress_bar.finish();
 }
 
-fn parse_number(episode: String) -> u16 {
-    match episode.parse::<u16>() {
+fn parse_number(str_num: String) -> u16 {
+    let c_str_num = str_num.replace(|c: char| !c.is_numeric(), "");
+    match c_str_num.parse::<u16>() {
         Ok(e) => e,
-        Err(_) => {
-            eprintln!("Episode number must be numeric.");
+        Err(err) => {
+            if err.description().eq_ignore_ascii_case("cannot parse integer from empty string") { return 0 }
+            eprintln!("Input must be numeric.");
             exit(1);
         }
     }
 }
 
-fn play_video(filenames: Vec<String>, dir_path: PathBuf) -> thread::JoinHandle<()>{
+#[cfg(feature = "mpv")]
+fn play_video(filenames: Vec<String>, dir_path: PathBuf) -> thread::JoinHandle<()> {
     thread::spawn(move || {
         thread::sleep(std::time::Duration::from_secs(5));
         let mut i = 0;
@@ -313,5 +407,28 @@ fn play_video(filenames: Vec<String>, dir_path: PathBuf) -> thread::JoinHandle<(
                 video_path.to_str().unwrap()
             );
         }
+    })
+}
+
+#[cfg(not(feature = "mpv"))]
+fn play_video(filenames: Vec<String>, dir_path: PathBuf) -> thread::JoinHandle<()> {
+    thread::spawn(move || {
+        thread::sleep(std::time::Duration::from_secs(5));
+        let filename = &filenames[0];
+        let video_path = dir_path.join(filename);
+
+        let mut timeout = 0;
+        while timeout < 5 { //Initial connection waiting
+            if !video_path.is_file() {
+                timeout += 1;
+                thread::sleep(std::time::Duration::from_secs(5));
+            } else {
+                break;
+            }
+        }
+        match opener::open(video_path) {
+            Ok(_) => {},
+            Err(e) => { eprintln!("{:?}", e)},
+        };
     })
 }

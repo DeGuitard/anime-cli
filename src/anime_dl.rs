@@ -233,7 +233,6 @@ pub fn connect_and_download(request: IRCRequest, channel_senders: Vec<Sender<i64
                     if timeout_counter > timeout_threshold {
                         status_bar_sender.send(format!("Timed out receiving dcc send for pack {}", package_number)).unwrap();
                     }
-                    //todo try again but different bot
                 }
             }
         }
