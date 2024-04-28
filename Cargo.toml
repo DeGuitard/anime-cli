@@ -20,8 +20,8 @@ regex = "1"
 reqwest = "0.9.19"
 serde = "1.0.98"
 rand = "0.7.3"
-term_size = "1.0.0-beta1"
 opener = "0.4.1"
+crossterm = "0.17.3"
 
 [features]
 default = ["mpv"]

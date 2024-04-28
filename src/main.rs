@@ -1,21 +1,24 @@
 #[cfg(feature = "mpv")]
 extern crate mpv;
-extern crate term_size;
+extern crate crossterm;
 
 mod anime_dl;
 mod anime_find;
+mod anime_watch;
 
 use getopts::Options;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Path};
 use std::ffi::OsStr;
 use std::process::exit;
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::thread;
 use std::io;
+use std::error::Error;
 
 use pbr::{MultiBar, Pipe, ProgressBar, Units};
-use std::error::Error;
+use crossterm::terminal::size;
+use crossterm::ErrorKind;
 
 static IRC_SERVER: &str = "irc.rizon.net:6667";
 static IRC_CHANNEL: &str = "nibl";
@@ -28,6 +31,14 @@ const AUDIO_EXTENSIONS: &'static [&'static str] = &["aif", "cda", "mid", "midi",
 const VIDEO_EXTENSIONS: &'static [&'static str] = &["3g2", "3gp", "avi", "flv", "h264",
                                                     "m4v", "mkv", "mov", "mp4", "mpg",
                                                     "mpeg", "rm", "swf", "vob", "wmv"];
+
+pub fn is_valid_media_file(ext: &str) -> bool {
+    AUDIO_EXTENSIONS.contains(&ext) || VIDEO_EXTENSIONS.contains(&ext)
+}
+
+const ACCEPTABLE_WIDTH_PERCENTAGE: u16 = 50; // Filename only takes up half the screen
+const CHAR_THRESH_1: u16 = 55; // Style 1 truncation until this # chars width
+const CHAR_THRESH_2: u16 = 35; // Style 2 truncation until this # chars, then turn off bars altogether
 
 fn print_usage(program: &str, opts: Options) {
     let msg = opts.short_usage(&program);
@@ -52,14 +63,14 @@ fn print_usage(program: &str, opts: Options) {
     ");
 }
 
-fn get_cli_input(prompt: &str) -> String {
+pub fn get_cli_input(prompt: &str) -> String {
     println!("{}", prompt);
     let mut input = String::new();
     match io::stdin().read_line(&mut input) {
         Ok(_) => {},
         Err(e) => {
             eprintln!("{}", e);
-            eprintln!("Please enter a normal query");
+            eprintln!("Please enter a normal input");
             exit(1);
         }
     }
@@ -75,12 +86,20 @@ fn main() {
         .optopt("b", "batch", "Batch end number", "NUMBER")
         .optopt("r", "resolution", "Resolution", "NUMBER")
         .optflag("n", "noshow", "No auto viewer")
+        .optflag("x", "explore", "Browse local collection")
         .optflag("h", "help", "print this help menu");
 
     // Unfortunately, cannot use getopts to check for a single optional flag
     // https://github.com/rust-lang-nursery/getopts/issues/46
     if args.contains(&"-h".to_string()) || args.contains(&"--help".to_string()) {
         print_usage(&program, opts);
+        exit(0);
+    }
+    if args.contains(&"-x".to_string()) || args.contains(&"--explore".to_string()) {
+        match anime_watch::browse_anime_listings() {
+            Ok(_) => {},
+            Err(_) => { eprintln!("Could not spawn virtual screen"); }
+        };
         exit(0);
     }
     let mut noshow = false;
@@ -125,7 +144,18 @@ fn main() {
 
     } else {
         println!("Welcome to anime-cli");
-        println!("Default resolution: None | episode: None | batch = episode");
+        let start = get_cli_input("Enter 'x' to browse, anything else to search");
+        match start.as_str() {
+            "x" | "X" => {
+                match anime_watch::browse_anime_listings() {
+                    Ok(_) => {},
+                    Err(_) => { eprintln!("Could not spawn virtual screen"); }
+                };
+                exit(0);
+            },
+            _ => { }
+        }
+        println!("Default resolution: None | Episode: None | Batch = episode");
         println!("Resolution shortcut: 1 => 480p | 2 => 720p | 3 => 1080p");
         query = get_cli_input("Anime/Movie name: ");
         resolution =  match parse_number(get_cli_input("Resolution: ")) {
@@ -167,7 +197,7 @@ fn main() {
             Ok(p) => {
                 match Path::new(&p.filename).extension().and_then(OsStr::to_str) {
                     Some(ext) => {
-                        if !AUDIO_EXTENSIONS.contains(&ext) && !VIDEO_EXTENSIONS.contains(&ext) {
+                        if !is_valid_media_file(ext) {
                             eprintln!("Warning, this is not a media file! Skipping");
                         } else {
                             dccpackages.push(p);
@@ -191,7 +221,7 @@ fn main() {
     };
     let dir_path= Path::new(&query).to_owned();
 
-    let terminal_dimensions  = term_size::dimensions();
+    let terminal_dimensions = size();
 
     let mut channel_senders  = vec![];
     let mut multi_bar = MultiBar::new();
@@ -205,14 +235,14 @@ fn main() {
 
         let pb_message;
         match terminal_dimensions {
-            Some((w, _)) => {
-                let acceptable_length = w / 2;
-                if &dccpackages[i].filename.len() > &acceptable_length { // trim the filename
-                    let first_half = &dccpackages[i].filename[..dccpackages[i].filename.char_indices().nth(acceptable_length / 2).unwrap().0];
-                    let second_half = &dccpackages[i].filename[dccpackages[i].filename.char_indices().nth_back(acceptable_length / 2).unwrap().0..];
-                    if acceptable_length > 50 { // 50 and 35 are arbitrary numbers
+            Ok((w, _)) => {
+                let acceptable_length = (w as f64 * (ACCEPTABLE_WIDTH_PERCENTAGE as f64 / 100.0)) as u16;
+                if &(dccpackages[i].filename.len() as u16) > &acceptable_length { // trim the filename
+                    let first_half = &dccpackages[i].filename[..dccpackages[i].filename.char_indices().nth(acceptable_length as usize / 2).unwrap().0];
+                    let second_half = &dccpackages[i].filename[dccpackages[i].filename.char_indices().nth_back(acceptable_length as usize / 2).unwrap().0..];
+                    if acceptable_length > CHAR_THRESH_1 {
                         pb_message = format!("{}...{}: ", first_half, second_half);
-                    } else if acceptable_length > 35 {
+                    } else if acceptable_length > CHAR_THRESH_2 {
                         pb_message = format!("...{}: ", second_half);
                     } else {
                         pb_message = format!("{} added to list", dccpackages[i].filename);
@@ -222,7 +252,7 @@ fn main() {
                     pb_message = format!("{}: ", dccpackages[i].filename);
                 }
             },
-            None => {
+            Err(_) => {
                 pb_message = format!("{} added to list", dccpackages[i].filename);
                 safe_to_spawn_bar = false;
             },
@@ -235,7 +265,7 @@ fn main() {
             progress_bar = Some(pb);
         } else { // If we can't spawn a bar, we just issue normal stdout updates
             progress_bar = None;
-            multi_bar.println(&pb_message);
+            println!("{}", pb_message);
         }
 
         let status_bar_sender_clone = status_bar_sender.clone();
@@ -256,7 +286,7 @@ fn main() {
     }
 
     let status_bar_handle = thread::spawn(move || {
-        update_status_bar(status_bar, status_bar_receiver);
+        update_status_bar(status_bar, status_bar_receiver, terminal_dimensions);
     });
     multi_bar_handles.push(status_bar_handle);
 
@@ -276,10 +306,10 @@ fn main() {
     if !noshow {
         video_handle =
             if cfg!(feature = "mpv") {
-                Some(play_video(dccpackages.into_iter().map(|package| package.filename).collect(), dir_path.clone()))
+                Some(anime_watch::play_video(dccpackages.into_iter().map(|package| package.filename).collect(), dir_path.clone()))
             } else {
                 if num_episodes == 1 { //If we don't have mpv, we'll open the file using default media app. We can't really hook into it so we limit to 1 file so no spam
-                    Some(play_video(dccpackages.into_iter().map(|package| package.filename).collect(), dir_path.clone()))
+                    Some(anime_watch::play_video(dccpackages.into_iter().map(|package| package.filename).collect(), dir_path.clone()))
                 } else {
                     None
                 }
@@ -299,19 +329,34 @@ fn main() {
     multi_bar_handles.into_iter().for_each(|handle| handle.join().unwrap());
 }
 
-fn update_status_bar(progress_bar: Option<ProgressBar<Pipe>>, receiver: Receiver<String>) {
-    let reader = |num: Result<String, _>, msg: &str| { match num {
-        Ok(p) => p,
-        Err(_) => {
-            eprintln!("{}", msg);
-            exit(1);
-        },
-    }};
+fn update_status_bar(progress_bar: Option<ProgressBar<Pipe>>, receiver: Receiver<String>, terminal_dimensions: Result<(u16, u16), ErrorKind>) {
+    let trim_message = |length: u16, msg: String| {
+        let mut result = msg;
+        if length > 0 && result.len() > length as usize {
+            let first_half = &result[..result.char_indices().nth(length as usize / 2).unwrap().0];
+            let second_half = &result[result.char_indices().nth_back(length as usize / 2).unwrap().0..];
+            if length > CHAR_THRESH_1 {
+                result = format!("{}...{}: ", first_half, second_half);
+            } else if length > CHAR_THRESH_2 {
+                result = format!("...{}: ", second_half);
+            } else {
+                result = format!("Progress...");
+            }
+        }
 
+        result
+    };
     if progress_bar.is_some() {
+        let mut acceptable_length = 0;
+        match terminal_dimensions {
+            Ok((w, _)) => {
+                acceptable_length = (w as f64 * (ACCEPTABLE_WIDTH_PERCENTAGE as f64 / 100.0)) as u16;
+            }
+            Err(_) => { }
+        }
         let mut pb = progress_bar.unwrap();
         pb.tick();
-        let mut progress = reader(receiver.recv(), "Error updating status bar");
+        let mut progress = trim_message(acceptable_length, receiver.recv().expect("Error updating status bar"));
 
         while !progress.eq("Success") {
             pb.tick();
@@ -320,17 +365,17 @@ fn update_status_bar(progress_bar: Option<ProgressBar<Pipe>>, receiver: Receiver
             }
 
             pb.message(&format!("{} ", progress));
-            progress = reader(receiver.recv(), "Error updating status bar");
+            progress = trim_message(acceptable_length, receiver.recv().expect("Error updating status bar"));
         }
         pb.message(&format!("{} ", progress));
         pb.tick();
         pb.finish();
     } else {
-        let mut progress = reader(receiver.recv(), "Error updating status");
+        let mut progress = receiver.recv().expect("Error updating status");
 
         while !progress.eq("Success") {
             println!("{} ", progress);
-            progress = reader(receiver.recv(), "Error updating status");
+            progress = receiver.recv().expect("Error updating status");
         }
 
         println!("{} ", progress);
@@ -338,31 +383,23 @@ fn update_status_bar(progress_bar: Option<ProgressBar<Pipe>>, receiver: Receiver
 }
 
 fn update_bar(progress_bar: Option<ProgressBar<Pipe>>, receiver: Receiver<i64>, status_bar_sender: Sender<String>) {
-    let reader = |num: Result<i64, _>, msg: &str| { match num {
-        Ok(p) => p,
-        Err(_) => {
-            eprintln!("{}", msg);
-            exit(1);
-        },
-    }};
-
     if progress_bar.is_some() {
         let mut pb = progress_bar.unwrap();
         pb.tick();
 
-        let mut progress = reader(receiver.recv(), "Error updating progress bar");
+        let mut progress = receiver.recv().expect("Error updating progress bar");
 
         while progress > 0 {
             pb.set(progress as u64);
 
-            progress = reader(receiver.recv(), "Error updating progress bar");
+            progress = receiver.recv().expect("Error updating progress bar");
         }
         pb.finish();
     } else {
-        let mut progress = reader(receiver.recv(), "Error updating progress");
+        let mut progress = receiver.recv().expect("Error updating progress");
 
         while progress > 0 {
-            progress = reader(receiver.recv(), "Error updating progress");
+            progress = receiver.recv().expect("Error updating progress");
         }
     }
 
@@ -379,101 +416,4 @@ fn parse_number(str_num: String) -> u16 {
             exit(1);
         }
     }
-}
-
-#[cfg(feature = "mpv")]
-fn play_video(filenames: Vec<String>, dir_path: PathBuf) -> thread::JoinHandle<()> {
-    thread::spawn(move || {
-        thread::sleep(std::time::Duration::from_secs(5));
-        let mut i = 0;
-        let mut timeout = 0;
-        let mut filename = &filenames[i];
-        let video_path = dir_path.join(filename);
-        while timeout < 5 { //Initial connection waiting
-            if !video_path.is_file() {
-                timeout += 1;
-                thread::sleep(std::time::Duration::from_secs(5));
-            } else {
-                break;
-            }
-        }
-        let mut mpv_builder = mpv::MpvHandlerBuilder::new().expect("Failed to init MPV builder");
-        if video_path.is_file() {
-            let video_path = video_path
-                .to_str()
-                .expect("Expected a string for Path, got None");
-            mpv_builder.set_option("osc", true).unwrap();
-            mpv_builder
-                .set_option("input-default-bindings", true)
-                .unwrap();
-            mpv_builder.set_option("input-vo-keyboard", true).unwrap();
-            let mut mpv = mpv_builder.build().expect("Failed to build MPV handler");
-            mpv.command(&["loadfile", video_path as &str])
-                .expect("Error loading file");
-            'main: loop {
-                while let Some(event) = mpv.wait_event(0.0) {
-                    //println!("{:?}", event);
-                    match event {
-                        mpv::Event::Shutdown => {
-                            break 'main;
-                        }
-                        mpv::Event::Idle => {
-                            if i >= filenames.len() {
-                                break 'main;
-                            }
-                        }
-                        mpv::Event::EndFile(Ok(mpv::EndFileReason::MPV_END_FILE_REASON_EOF)) => {
-                            i += 1;
-                            if i >= filenames.len() {
-                                break 'main;
-                            }
-                            filename = &filenames[i];
-                            let next_video_path = dir_path.join(filename);
-                            if next_video_path.is_file() {
-                                let next_video_path = next_video_path
-                                    .to_str()
-                                    .expect("Expected a string for Path, got None");
-                                mpv.command(&["loadfile", next_video_path as &str])
-                                    .expect("Error loading file");
-                            } else {
-                                eprintln!(
-                                    "A file is required; {} is not a valid file",
-                                    next_video_path.to_str().unwrap()
-                                );
-                            }
-                        }
-                        _ => {}
-                    };
-                }
-            }
-        } else {
-            eprintln!(
-                "A file is required; {} is not a valid file",
-                video_path.to_str().unwrap()
-            );
-        }
-    })
-}
-
-#[cfg(not(feature = "mpv"))]
-fn play_video(filenames: Vec<String>, dir_path: PathBuf) -> thread::JoinHandle<()> {
-    thread::spawn(move || {
-        thread::sleep(std::time::Duration::from_secs(5));
-        let filename = &filenames[0];
-        let video_path = dir_path.join(filename);
-
-        let mut timeout = 0;
-        while timeout < 5 { //Initial connection waiting
-            if !video_path.is_file() {
-                timeout += 1;
-                thread::sleep(std::time::Duration::from_secs(5));
-            } else {
-                break;
-            }
-        }
-        match opener::open(video_path) {
-            Ok(_) => {},
-            Err(e) => { eprintln!("{:?}", e)},
-        };
-    })
 }

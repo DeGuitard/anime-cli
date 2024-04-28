@@ -14,6 +14,10 @@ use std::sync::mpsc::{Sender};
 use regex::Regex;
 use std::thread::sleep;
 
+const TIMEOUT_THRESHOLD: i8 = 5;
+const LOGIN_TIMEOUT_TICK: u64 = 500; // milliseconds before timeout counter ticks once
+const DL_TIMEOUT_TICK: u64 = 3000;
+
 lazy_static! {
     //static ref NICKNAME_REGEX: Regex = Regex::new(r#""#).unwrap();
     static ref DCC_SEND_REGEX: Regex =
@@ -75,8 +79,7 @@ pub fn connect_and_download(request: IRCRequest, channel_senders: Vec<Sender<i64
     let stream = log_in(&request).unwrap();
     let mut connection : IRCConnection = IRCConnection { socket: stream, partial_msg: "".to_string()};
 
-    let mut next = time::Instant::now() + time::Duration::from_millis(500);
-    let timeout_threshold = 5;
+    let mut next = time::Instant::now() + time::Duration::from_millis(LOGIN_TIMEOUT_TICK);
     let mut timeout_counter = 0;
     status_bar_sender.send(format!("Logging into Rizon...")).unwrap();
     while !has_joined {
@@ -109,9 +112,9 @@ pub fn connect_and_download(request: IRCRequest, channel_senders: Vec<Sender<i64
             if now >= next {
                 let channel_join_cmd = format!("JOIN #{}\r\n", request.channel);
                 connection.socket.write(channel_join_cmd.as_bytes()).unwrap();
-                next = now + time::Duration::from_millis(500);
+                next = now + time::Duration::from_millis(LOGIN_TIMEOUT_TICK);
                 timeout_counter += 1;
-                if timeout_counter > timeout_threshold {
+                if timeout_counter > TIMEOUT_THRESHOLD {
                     return Err(Error::new(ErrorKind::Other, String::from("Timed out logging in")))
                 }
 
@@ -127,7 +130,7 @@ pub fn connect_and_download(request: IRCRequest, channel_senders: Vec<Sender<i64
     let mut resume = false;
     let mut wait = false;
     let mut received_reply;
-    while download_handles.len() < request.packages.len() && timeout_counter <= timeout_threshold {
+    while download_handles.len() < request.packages.len() && timeout_counter <= TIMEOUT_THRESHOLD {
         if wait {
             //wait til a previous package is downloaded then proceed
             let f = fs::File::open(&requests[i-1].filename)?;
@@ -145,10 +148,10 @@ pub fn connect_and_download(request: IRCRequest, channel_senders: Vec<Sender<i64
             connection.socket.write(xdcc_send_cmd.as_bytes()).unwrap();
         }
 
-        next = time::Instant::now() + time::Duration::from_millis(3000);
+        next = time::Instant::now() + time::Duration::from_millis(DL_TIMEOUT_TICK);
         timeout_counter = 0;
         received_reply = false;
-        while !received_reply && timeout_counter <= timeout_threshold {
+        while !received_reply && timeout_counter <= TIMEOUT_THRESHOLD {
             let message = connection.read_message();
             let now = time::Instant::now();
             if message.is_some() {
@@ -225,10 +228,10 @@ pub fn connect_and_download(request: IRCRequest, channel_senders: Vec<Sender<i64
                     }
                 }
                 if now >= next && !dl_in_progress {
-                    next = now + time::Duration::from_millis(3000);
+                    next = now + time::Duration::from_millis(DL_TIMEOUT_TICK);
                     timeout_counter += 1;
-                    status_bar_sender.send(format!("({}/{}) Waiting on dcc send reply for pack {}...", timeout_counter, timeout_threshold, package_number)).unwrap();
-                    if timeout_counter > timeout_threshold {
+                    status_bar_sender.send(format!("({}/{}) Waiting on dcc send reply for pack {}...", timeout_counter, TIMEOUT_THRESHOLD, package_number)).unwrap();
+                    if timeout_counter > TIMEOUT_THRESHOLD {
                         status_bar_sender.send(format!("Timed out receiving dcc send for pack {}", package_number)).unwrap();
                     }
                 }
