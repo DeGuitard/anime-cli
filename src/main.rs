@@ -3,7 +3,8 @@ mod anime_dl;
 mod anime_find;
 
 use getopts::Options;
-use std::path::Path;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::thread;
@@ -53,7 +54,7 @@ fn main() {
 
     let resolution: Option<u16> = match matches.opt_str("r").as_ref().map(String::as_str) {
         Some("0") => None,
-        Some(ep) => Some(parse_number(String::from(ep))),
+        Some(r) => Some(parse_number(String::from(r))),
         None => Some(720),
     };
 
@@ -74,8 +75,6 @@ fn main() {
         batch = episode;
     }
     let mut dccpackages = vec![];
-    //let mut packlist = vec![];
-    //let mut botlist = vec![];
 
     for i in episode.unwrap_or(1)..batch.unwrap_or(episode.unwrap_or(1)) + 1 {
         if episode.is_some() || batch.is_some() {
@@ -83,16 +82,23 @@ fn main() {
         } else {
             println!("Searching for {}", query);
         }
-        let package = match anime_find::find_package(&query, &episode.or(batch).and(Some(i))) {
-            Ok(p) => p,
+        match anime_find::find_package(&query, &episode.or(batch).and(Some(i))) {
+            Ok(p) => dccpackages.push(p),
             Err(e) => {
                 eprintln!("{}", e);
-                exit(1);
             }
         };
-
-        dccpackages.push(package);
     }
+
+    if dccpackages.len() == 0 {
+        exit(1);
+    }
+
+    match fs::create_dir(&query) {
+        Ok(_) => println!{"Created folder {}", &query},
+        Err(_) => eprintln!{"Could not create a new folder, does it exist?"},
+    };
+    let dir_path= Path::new(&query).to_owned();
 
     let mut channel_senders  = vec![];
     let mut multi_bar = MultiBar::new();
@@ -137,10 +143,10 @@ fn main() {
 
     let mut video_handle = None;
     if !noshow {
-        video_handle = Some(play_video(dccpackages.into_iter().map(|package| package.filename).collect()));
+        video_handle = Some(play_video(dccpackages.into_iter().map(|package| package.filename).collect(), dir_path.clone()));
     }
 
-    match anime_dl::connect_and_download(irc_request, channel_senders, status_bar_sender) {
+    match anime_dl::connect_and_download(irc_request, channel_senders, status_bar_sender, dir_path.clone()) {
         Ok(_) => {},
         Err(e) => {
             eprintln!("{}", e);
@@ -179,6 +185,7 @@ fn update_status_bar(progress_bar: &mut ProgressBar<Pipe>, receiver: Receiver<St
         };
     }
     progress_bar.message(&format!("{} ", progress));
+    progress_bar.tick();
     progress_bar.finish();
 }
 
@@ -217,13 +224,13 @@ fn parse_number(episode: String) -> u16 {
     }
 }
 
-fn play_video(filenames: Vec<String>) -> thread::JoinHandle<()>{
+fn play_video(filenames: Vec<String>, dir_path: PathBuf) -> thread::JoinHandle<()>{
     thread::spawn(move || {
         thread::sleep(std::time::Duration::from_secs(5));
         let mut i = 0;
         let mut timeout = 0;
         let mut filename = &filenames[i];
-        let video_path: &Path = Path::new(&filename);
+        let video_path = dir_path.join(filename);
         while timeout < 5 { //Initial connection waiting
             if !video_path.is_file() {
                 timeout += 1;
@@ -263,7 +270,7 @@ fn play_video(filenames: Vec<String>) -> thread::JoinHandle<()>{
                                 break 'main;
                             }
                             filename = &filenames[i];
-                            let next_video_path = Path::new(&filename);
+                            let next_video_path = dir_path.join(filename);
                             if next_video_path.is_file() {
                                 let next_video_path = next_video_path
                                     .to_str()

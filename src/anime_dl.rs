@@ -1,18 +1,21 @@
 extern crate pbr;
 extern crate regex;
+extern crate rand;
 
 use std::io::{Read, Write, Error, ErrorKind};
 use std::net::{IpAddr, Ipv4Addr, Shutdown, TcpStream};
 use std::str::from_utf8;
 use std::{thread, time, fs};
+use std::path::{PathBuf};
+use rand::Rng;
 
 use lazy_static::lazy_static;
-//use pbr::{MultiBar, Pipe, ProgressBar, Units};
 use std::sync::mpsc::{Sender};
 use regex::Regex;
 use std::thread::sleep;
 
 lazy_static! {
+    //static ref NICKNAME_REGEX: Regex = Regex::new(r#""#).unwrap();
     static ref DCC_SEND_REGEX: Regex =
         Regex::new(r#"DCC SEND "?(.*)"? (\d+) (\d+) (\d+)"#).unwrap();
     static ref PING_REGEX: Regex = Regex::new(r#"PING :.*"#).unwrap();
@@ -64,8 +67,8 @@ impl IRCConnection {
     }
 }
 
-pub fn connect_and_download(request: IRCRequest, channel_senders: Vec<Sender<i64>>, status_bar_sender: Sender<String>) -> Result<(), std::io::Error> {
-    status_bar_sender.send(format!("Logging into Rizon...")).unwrap();
+pub fn connect_and_download(request: IRCRequest, channel_senders: Vec<Sender<i64>>, status_bar_sender: Sender<String>, dir_path: PathBuf) -> Result<(), std::io::Error> {
+    status_bar_sender.send(format!("Connecting to Rizon...")).unwrap();
 
     let mut download_handles = Vec::new();
     let mut has_joined = false;
@@ -75,7 +78,7 @@ pub fn connect_and_download(request: IRCRequest, channel_senders: Vec<Sender<i64
     let mut next = time::Instant::now() + time::Duration::from_millis(500);
     let timeout_threshold = 5;
     let mut timeout_counter = 0;
-    status_bar_sender.send(format!("Logged in")).unwrap();
+    status_bar_sender.send(format!("Logging into Rizon...")).unwrap();
     while !has_joined {
         let message = connection.read_message();
         let now = time::Instant::now();
@@ -173,8 +176,9 @@ pub fn connect_and_download(request: IRCRequest, channel_senders: Vec<Sender<i64
                         //let mut progress_bar = multi_bar.create_bar(requests[i].file_size as u64);
                         let req = requests[i].clone();
                         let sender = channel_senders[i].clone();
+                        let path = dir_path.clone();
                         let handle = thread::spawn(move || {
-                            download_file(req, sender).unwrap();
+                            download_file(req, sender, path).unwrap();
                         });
                         download_handles.push(handle);
                         i += 1;
@@ -186,8 +190,9 @@ pub fn connect_and_download(request: IRCRequest, channel_senders: Vec<Sender<i64
                     //let mut progress_bar = multi_bar.create_bar(requests[i].file_size as u64);
                     let req = requests[i].clone();
                     let sender = channel_senders[i].clone();
+                    let path = dir_path.clone();
                     let handle = thread::spawn(move || {
-                        download_file(req, sender).unwrap();
+                        download_file(req, sender, path).unwrap();
                     });
                     download_handles.push(handle);
                     i += 1;
@@ -238,7 +243,6 @@ pub fn connect_and_download(request: IRCRequest, channel_senders: Vec<Sender<i64
         .write("QUIT :my job is done here!\r\n".as_bytes())
         .unwrap();
     connection.socket.shutdown(Shutdown::Both).unwrap();
-    //multi_bar.listen();
     download_handles
         .into_iter()
         .for_each(|handle| handle.join().unwrap());
@@ -248,8 +252,11 @@ pub fn connect_and_download(request: IRCRequest, channel_senders: Vec<Sender<i64
 
 fn log_in(request: &IRCRequest) -> Result<TcpStream, std::io::Error> {
     let mut stream = TcpStream::connect(&request.server)?;
-    stream.write(format!("NICK {}\r\n", request.nickname).as_bytes())?;
-    stream.write(format!("USER {} 0 * {}\r\n", request.nickname, request.nickname).as_bytes())?;
+    let mut rng = rand::thread_rng();
+    let rng_num: u16 = rng.gen();
+    let rng_nick = format!("{}{}", request.nickname, rng_num);
+    stream.write(format!("NICK {}\r\n", rng_nick).as_bytes())?;
+    stream.write(format!("USER {} 0 * {}\r\n", rng_nick, rng_nick).as_bytes())?;
     Ok(stream)
 }
 
@@ -267,10 +274,11 @@ fn parse_dcc_send(message: &String) -> DCCSend {
 fn download_file(
     request: DCCSend,
     sender: Sender<i64>,
-) -> std::result::Result<(), std::io::Error> {
-    let mut file =  match fs::OpenOptions::new().append(true).open(&request.filename) {
+    dir_path: PathBuf) -> std::result::Result<(), std::io::Error> {
+    let file_path = dir_path.join(&request.filename);
+    let mut file =  match fs::OpenOptions::new().append(true).open(file_path.clone()) {
         Ok(existing_file) => existing_file,
-        Err(_) => fs::File::create(&request.filename)?
+        Err(_) => fs::File::create(file_path.clone())?
     };
     let mut stream = TcpStream::connect(format!("{}:{}", request.ip, request.port))?;
     let mut buffer = [0; 4096];
