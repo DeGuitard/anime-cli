@@ -27,8 +27,8 @@ Could not find any result for this query.
 $ anime-cli -q "Sakamoto Desu ga" -b 12
 [HorribleSubs] Sakamoto desu ga - 01 [720p].mkv: 329.73 MB / 329.73 MB [==========================] 100.00 % 4.69 MB/s
 [HorribleSubs] Sakamoto desu ga - 02 [720p].mkv: 329.07 MB / 329.07 MB [==========================] 100.00 % 4.95 MB/s
-[HorribleSubs] Sakamoto desu ga - 03 [720p].mkv: 329.73 MB / 329.73 MB [================>---------] 100.00 % 4.23 MB/s
-[HorribleSubs] Sakamoto desu ga - 04 [720p].mkv: 329.07 MB / 329.07 MB [===========>--------------] 100.00 % 4.10 MB/s
+[HorribleSubs] Sakamoto desu ga - 03 [720p].mkv: 215.03 MB / 329.65 MB [================>---------]  65.23 % 4.23 MB/s
+[HorribleSubs] Sakamoto desu ga - 04 [720p].mkv: 144.81 MB / 329.33 MB [===========>--------------]  43.97 % 4.10 MB/s
 ...
 ```
 
