@@ -1,4 +1,4 @@
-# anime-cl 
+# anime-cli
 CLI to find, download and stream anime.
 
 ## Usage
