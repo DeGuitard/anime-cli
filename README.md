@@ -6,11 +6,12 @@ CLI to find, download and stream anime.
 Usage: anime-cli -q QUERY [-e NUMBER] [-b NUMBER] [-n] [-h]
 
 Options:                               
--q, --query QUERY     Query to run
--e, --episode NUMBER  Episode number
--b, --batch NUMBER    Download episodes from -e up to -b
--n, --noshow          Do not automatically open media player
--h, --help            print this help menu
+-q, --query QUERY       Query to run
+-e, --episode NUMBER    Episode number
+-b, --batch NUMBER      Download episodes from -e up to -b
+-r, --resolution NUMBER Specifies resolution, default is 720, put 0 in order to remove resolution from search
+-n, --noshow            Do not automatically open media player
+-h, --help              print this help menu
 ```
 
 #### Examples:
