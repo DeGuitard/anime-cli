@@ -118,24 +118,27 @@ fn main() {
             None => None
         };
 
-        batch = matches.opt_str("b").map(|b| parse_number(b));
+        batch = match matches.opt_str("b") {
+            Some(b) => Some(parse_number(b)),
+            None => None
+        }
 
     } else {
         println!("Welcome to anime-cli");
-        println!("Default resolution: 720 | episode: 1 | batch = episode");
+        println!("Default resolution: 720 | episode: None | batch = episode");
         query = get_cli_input("Anime/Movie name: ");
-        resolution =  Some(match parse_number(get_cli_input("Resolution: ")) {
-            0 => 720,
-            r => r,
-        });
-        episode = Some(match parse_number(get_cli_input("Episode number: ")) {
-            0 => 1,
-            e => e,
-        });
-        batch = Some(match parse_number(get_cli_input("Batch Ep End Number: ")) {
-            0 => episode.unwrap(),
-            b => b,
-        });
+        resolution =  match parse_number(get_cli_input("Resolution: ")) {
+            0 => Some(720),
+            r => Some(r),
+        };
+        episode = match parse_number(get_cli_input("Episode number: ")) {
+            0 => None,
+            e => Some(e),
+        };
+        batch = match parse_number(get_cli_input("Batch Ep End Number: ")) {
+            0 => None,
+            b => Some(b),
+        };
     }
 
     query = query + match resolution {
