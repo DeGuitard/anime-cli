@@ -67,7 +67,7 @@ fn get_cli_input(prompt: &str) -> String {
 }
 
 fn main() {
-    let args: Vec<String> = std::env::args().collect();
+    let args: Vec<String> = std::env::args().collect(); // We collect args here
     let program = args[0].clone();
     let mut opts = Options::new();
     opts.optopt("q", "query", "Query to run", "QUERY")
@@ -97,14 +97,14 @@ fn main() {
         }
     };
 
-    let cli = if args.len() > 1 { true } else { false };
+    let cli = if args.len() > 1 { true } else { false }; // Are we in cli mode or prompt mode?
 
     let mut query: String;
     let resolution: Option<u16>;
     let episode: Option<u16>;
     let mut batch: Option<u16>;
 
-    if cli {
+    if cli { // Get user input
         resolution = match matches.opt_str("r").as_ref().map(String::as_str) {
             Some("0") => None,
             Some(r) => Some(parse_number(String::from(r))),
@@ -145,18 +145,18 @@ fn main() {
         };
     }
 
-    query = query + match resolution {
+    query = query + match resolution { // If resolution entered, add a resolution to the query
         Some(x) => format!(" {}", x),
         None => "".to_string(),
     }.as_str();
 
-    if batch.is_some() && batch.unwrap() < episode.unwrap_or(1) {
+    if batch.is_some() && batch.unwrap() < episode.unwrap_or(1) { // Make sure batch end is never smaller than episode start
         batch = episode;
     }
 
     let mut dccpackages = vec![];
 
-    let mut num_episodes = 0;
+    let mut num_episodes = 0;  // Search for packs, verify it is media, and add to a list
     for i in episode.unwrap_or(1)..batch.unwrap_or(episode.unwrap_or(1)) + 1 {
         if episode.is_some() || batch.is_some() {
             println!("Searching for {} episode {}", query, i);
@@ -185,7 +185,7 @@ fn main() {
 
     if num_episodes == 0 { exit(1); }
 
-    match fs::create_dir(&query) {
+    match fs::create_dir(&query) { // organize
         Ok(_) => println!{"Created folder {}", &query},
         Err(_) => eprintln!{"Could not create a new folder, does it exist?"},
     };
@@ -204,8 +204,8 @@ fn main() {
         let pb_message;
         match terminal_dimensions {
           Some((w, _)) => {
-              let acceptable_length = w / 2;
-              if &dccpackages[i].filename.len() > &acceptable_length {
+              let acceptable_length = w / 2 - 4; // -4 because I add "..."
+              if &dccpackages[i].filename.len() > &acceptable_length { // trim the filename
                   let first_half = &dccpackages[i].filename[..dccpackages[i].filename.char_indices().nth(acceptable_length/2).unwrap().0];
                   let second_half = &dccpackages[i].filename[dccpackages[i].filename.char_indices().nth_back(acceptable_length/2).unwrap().0..];
                   pb_message = format!("{}...{}: ", first_half, second_half);
@@ -221,7 +221,7 @@ fn main() {
         progress_bar.message(&pb_message);
 
         let status_bar_sender_clone = status_bar_sender.clone();
-        handle = thread::spawn(move || {
+        handle = thread::spawn(move || { // create an individual thread for each bar in the multibar with its own i/o
             update_bar(&mut progress_bar, receiver, status_bar_sender_clone);
         });
 
@@ -237,7 +237,7 @@ fn main() {
     });
     multi_bar_handles.push(status_bar_handle);
 
-    let _ = thread::spawn(move || {
+    let _ = thread::spawn(move || { // multi bar listen is blocking
         multi_bar.listen();
     });
 
