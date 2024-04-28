@@ -51,6 +51,7 @@ Extract files to any location.
 Copy from x86_64 for 64bit or i686 for 32bit the following files.
 
 libmpv.dll.a -> $(project)/target/debug/deps/       and rename to mpv.lib
+
 mpv-1.dll    -> where `anime-cli.exe` is
 
 ## Disclaimer
