@@ -1,4 +1,6 @@
 extern crate mpv;
+extern crate term_size;
+
 mod anime_dl;
 mod anime_find;
 
@@ -100,6 +102,8 @@ fn main() {
     };
     let dir_path= Path::new(&query).to_owned();
 
+    let terminal_dimensions  = term_size::dimensions();
+
     let mut channel_senders  = vec![];
     let mut multi_bar = MultiBar::new();
     let mut multi_bar_handles = vec![];
@@ -107,10 +111,25 @@ fn main() {
     for i in 0..dccpackages.len() { //create bars for all our downloads
         let (sender, receiver) = channel();
         let handle;
-        let mut progress_bar = multi_bar.create_bar(dccpackages[i].sizekbits as u64);
 
+        let pb_message;
+        match terminal_dimensions {
+          Some((w, _)) => {
+              let acceptable_length = w / 2;
+              if &dccpackages[i].filename.len() > &acceptable_length {
+                  let first_half = &dccpackages[i].filename[..dccpackages[i].filename.char_indices().nth(acceptable_length/2).unwrap().0];
+                  let second_half = &dccpackages[i].filename[dccpackages[i].filename.char_indices().nth_back(acceptable_length/2).unwrap().0..];
+                  pb_message = format!("{}...{}: ", first_half, second_half);
+              } else {
+                  pb_message = format!("{}: ", dccpackages[i].filename);
+              }
+          },
+            None => pb_message = format!("{}: ", dccpackages[i].filename),
+        };
+
+        let mut progress_bar = multi_bar.create_bar(dccpackages[i].sizekbits as u64);
         progress_bar.set_units(Units::Bytes);
-        progress_bar.message(&format!("{}: ", dccpackages[i].filename));
+        progress_bar.message(&pb_message);
 
         let status_bar_sender_clone = status_bar_sender.clone();
         handle = thread::spawn(move || {

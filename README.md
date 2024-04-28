@@ -58,11 +58,9 @@ mpv-1.dll    -> where `anime-cli.exe` is
 When downloading anime, users are subject to country-specific software distribution laws. anime-dl is not designed to enable illegal activity. We do not promote piracy nor do we allow it under any circumstances. You should own an original copy of every content downloaded through this tool. Please take the time to review copyright and video distribution laws and/or policies for your country before proceeding.
 
 ## Todo
-* Implement batch streaming with seamless next episode
 * Support more media viewers such as VLC
 * Make this work on android
 * A search only function as well as select correct anime from list
 * Make an anime log so you can resume where you left off
-* Implement resume file download in case connection cuts out
 * Fix edge case where a rapid retry will prevent a user from downloading a file because it is queued
 * Add a graphical interface

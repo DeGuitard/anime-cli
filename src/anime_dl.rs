@@ -210,7 +210,7 @@ pub fn connect_and_download(request: IRCRequest, channel_senders: Vec<Sender<i64
                         format!("PRIVMSG {} :xdcc remove #{}\r\n", package_bot, package_number);
                     connection.socket.write(xdcc_remove_cmd.as_bytes()).unwrap();
                     let xdcc_cancel_cmd =
-                        format!("PRIVMSG {} :xdcc cancel", package_bot);
+                        format!("PRIVMSG {} :\x01XDCC CANCEL\x01\r\n", package_bot);
                     connection.socket.write(xdcc_cancel_cmd.as_bytes()).unwrap();
                     received_reply = true;
                 }

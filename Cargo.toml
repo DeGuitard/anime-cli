@@ -1,6 +1,6 @@
 [package]
 name = "anime-cli"
-version = "0.1.2"
+version = "0.1.3"
 description = "CLI to find, download and stream anime."
 authors = ["Daniel Pham <***REMOVED***>, Vianney Dupoy de Guitard <vianney@n4v1.com>"]
 license = "GPL-3.0"
@@ -20,3 +20,4 @@ regex = "1"
 reqwest = "0.9.19"
 serde = "1.0.98"
 rand = "0.7.3"
+term_size = "1.0.0-beta1"
