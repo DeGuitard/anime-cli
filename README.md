@@ -46,7 +46,7 @@ In order to play videos you will need mpv.
 ```
 
 ### Windows
-libmpv can be found [here](https://mpv.srsfckn.biz/) for windows. Click on [Dev]
+libmpv can be found [here](https://mpv.srsfckn.biz/) for windows. Click on \[Dev]
 Extract files to any location.
 Copy from x86_64 for 64bit or i686 for 32bit the following files.
 
@@ -61,6 +61,8 @@ When downloading anime, users are subject to country-specific software distribut
 * Implement batch streaming with seamless next episode
 * Support more media viewers such as VLC
 * Make this work on android
+* A search only function as well as select correct anime from list
+* Make an anime log so you can resume where you left off
 * Implement resume file download in case connection cuts out
 * Fix edge case where a rapid retry will prevent a user from downloading a file because it is queued
 * Add a graphical interface

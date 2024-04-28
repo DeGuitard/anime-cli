@@ -69,13 +69,19 @@ fn main() {
         None => None
     };
 
-    let batch = matches.opt_str("b").map(|ep|parse_number(ep));
-
+    let mut batch =  matches.opt_str("b").map(|ep|parse_number(ep));
+    if batch.is_some() && batch.unwrap() < episode.unwrap_or(1) {
+        batch = episode;
+    }
     let mut packlist = vec![];
     let mut botlist = vec![];
 
-    for i in episode.unwrap_or(0)..batch.unwrap_or(0) + 1 {
-        println!("Searching for {} episode {}", query, i);
+    for i in episode.unwrap_or(1)..batch.unwrap_or(episode.unwrap_or(1)) + 1 {
+        if episode.is_some() || batch.is_some() {
+            println!("Searching for {} episode {}", query, i);
+        } else {
+            println!("Searching for {}", query);
+        }
         let package = match anime_find::find_package(&query, &episode.or(batch).and(Some(i))) {
             Ok(p) => p,
             Err(e) => {

@@ -15,7 +15,7 @@ dependencies = [
 
 [[package]]
 name = "anime-cli"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "getopts 0.2.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
