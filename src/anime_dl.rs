@@ -7,7 +7,8 @@ use std::str::from_utf8;
 use std::{thread, time, fs};
 
 use lazy_static::lazy_static;
-use pbr::{MultiBar, Pipe, ProgressBar, Units};
+//use pbr::{MultiBar, Pipe, ProgressBar, Units};
+use std::sync::mpsc::{Sender};
 use regex::Regex;
 use std::thread::sleep;
 
@@ -63,16 +64,18 @@ impl IRCConnection {
     }
 }
 
-pub fn connect_and_download(request: IRCRequest, on_start: fn(String) -> thread::JoinHandle<()>) -> Result<(), std::io::Error> {
+pub fn connect_and_download(request: IRCRequest, channel_senders: Vec<Sender<i64>>, status_bar_sender: Sender<String>) -> Result<(), std::io::Error> {
+    status_bar_sender.send(format!("Logging into Rizon...")).unwrap();
+
     let mut download_handles = Vec::new();
     let mut has_joined = false;
-    let mut multi_bar = MultiBar::new();
     let stream = log_in(&request).unwrap();
     let mut connection : IRCConnection = IRCConnection { socket: stream, partial_msg: "".to_string()};
 
     let mut next = time::Instant::now() + time::Duration::from_millis(500);
     let timeout_threshold = 5;
     let mut timeout_counter = 0;
+    status_bar_sender.send(format!("Logged in")).unwrap();
     while !has_joined {
         let message = connection.read_message();
         let now = time::Instant::now();
@@ -114,6 +117,8 @@ pub fn connect_and_download(request: IRCRequest, on_start: fn(String) -> thread:
         //thread::sleep(time::Duration::from_micros(10));
     }
 
+    status_bar_sender.send(format!("Connected")).unwrap();
+
     let mut i = 0;
     let mut requests : Vec<DCCSend> = vec![];
     let mut resume = false;
@@ -152,8 +157,9 @@ pub fn connect_and_download(request: IRCRequest, on_start: fn(String) -> thread:
                 if DCC_SEND_REGEX.is_match(msg) {
                     let request = parse_dcc_send(msg);
                     requests.push(request);
+                    status_bar_sender.send(format!("Now downloading {}", &requests[i].filename)).unwrap();
                     if std::path::Path::new(&requests[i].filename).exists() {
-                        println!("Found an existing {}", &requests[i].filename);
+                        status_bar_sender.send(format!("Found an existing {}", &requests[i].filename)).unwrap();
                         let f = fs::File::open(&requests[i].filename)?;
                         let meta = f.metadata()?;
                         if (meta.len() as usize) < requests[i].file_size {
@@ -164,10 +170,11 @@ pub fn connect_and_download(request: IRCRequest, on_start: fn(String) -> thread:
                         }
                     }
                     if !resume {
-                        let mut progress_bar = multi_bar.create_bar(requests[i].file_size as u64);
+                        //let mut progress_bar = multi_bar.create_bar(requests[i].file_size as u64);
                         let req = requests[i].clone();
+                        let sender = channel_senders[i].clone();
                         let handle = thread::spawn(move || {
-                            download_file(req, &mut progress_bar, on_start).unwrap();
+                            download_file(req, sender).unwrap();
                         });
                         download_handles.push(handle);
                         i += 1;
@@ -175,11 +182,12 @@ pub fn connect_and_download(request: IRCRequest, on_start: fn(String) -> thread:
                     received_reply = true;
                 }
                 if resume && RESUME_REGEX.is_match(msg){
-                    println!("Attempting to resume download for {}", requests[i].filename);
-                    let mut progress_bar = multi_bar.create_bar(requests[i].file_size as u64);
+                    status_bar_sender.send(format!("Attempting to resume download for {}", requests[i].filename)).unwrap();
+                    //let mut progress_bar = multi_bar.create_bar(requests[i].file_size as u64);
                     let req = requests[i].clone();
+                    let sender = channel_senders[i].clone();
                     let handle = thread::spawn(move || {
-                        download_file(req, &mut progress_bar, on_start).unwrap();
+                        download_file(req, sender).unwrap();
                     });
                     download_handles.push(handle);
                     i += 1;
@@ -192,7 +200,7 @@ pub fn connect_and_download(request: IRCRequest, on_start: fn(String) -> thread:
                     received_reply = true;
                 }
                 if NOTICE_REGEX.is_match(msg) {
-                    println!("A previous request was made for this pack, attempting to cancel and retry");
+                    status_bar_sender.send(format!("A previous request was made for pack {}, attempting to cancel and retry", package_number)).unwrap();
                     let xdcc_remove_cmd =
                         format!("PRIVMSG {} :xdcc remove #{}\r\n", package_bot, package_number);
                     connection.socket.write(xdcc_remove_cmd.as_bytes()).unwrap();
@@ -216,9 +224,9 @@ pub fn connect_and_download(request: IRCRequest, on_start: fn(String) -> thread:
                 if now >= next && !dl_in_progress {
                     next = now + time::Duration::from_millis(3000);
                     timeout_counter += 1;
-                    println!("({}/{}) Waiting on dcc send reply for pack {}...", timeout_counter, timeout_threshold, package_number);
+                    status_bar_sender.send(format!("({}/{}) Waiting on dcc send reply for pack {}...", timeout_counter, timeout_threshold, package_number)).unwrap();
                     if timeout_counter > timeout_threshold {
-                        println!("Timed out receiving dcc send for pack {}", package_number);
+                        status_bar_sender.send(format!("Timed out receiving dcc send for pack {}", package_number)).unwrap();
                     }
                     //todo try again but different bot
                 }
@@ -230,10 +238,11 @@ pub fn connect_and_download(request: IRCRequest, on_start: fn(String) -> thread:
         .write("QUIT :my job is done here!\r\n".as_bytes())
         .unwrap();
     connection.socket.shutdown(Shutdown::Both).unwrap();
-    multi_bar.listen();
+    //multi_bar.listen();
     download_handles
         .into_iter()
         .for_each(|handle| handle.join().unwrap());
+    status_bar_sender.send("Success".to_string()).unwrap();
     Ok(())
 }
 
@@ -257,10 +266,8 @@ fn parse_dcc_send(message: &String) -> DCCSend {
 
 fn download_file(
     request: DCCSend,
-    progress_bar: &mut ProgressBar<Pipe>,
-    on_start: fn(String) -> thread::JoinHandle<()>,
+    sender: Sender<i64>,
 ) -> std::result::Result<(), std::io::Error> {
-    let filename = request.filename.to_string();
     let mut file =  match fs::OpenOptions::new().append(true).open(&request.filename) {
         Ok(existing_file) => existing_file,
         Err(_) => fs::File::create(&request.filename)?
@@ -268,21 +275,18 @@ fn download_file(
     let mut stream = TcpStream::connect(format!("{}:{}", request.ip, request.port))?;
     let mut buffer = [0; 4096];
     let meta = file.metadata()?;
-    let mut progress: usize = meta.len() as usize;
-    progress_bar.set_units(Units::Bytes);
-    progress_bar.message(&format!("{}: ", &request.filename));
-    let videohandle = on_start(filename);
+    let mut progress = meta.len() as usize;
 
     while progress < request.file_size {
         let count = stream.read(&mut buffer[..])?;
         file.write(&mut buffer[..count])?;
         progress += count;
-        progress_bar.set(progress as u64);
+        sender.send(progress as i64).unwrap();
     }
-    progress_bar.finish();
+
+    sender.send(-1).unwrap();
     stream.shutdown(Shutdown::Both)?;
     file.flush()?;
 
-    videohandle.join().unwrap();
     Ok(())
 }
