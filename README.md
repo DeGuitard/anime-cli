@@ -6,7 +6,7 @@ Command Line Interface to find, download, and stream anime.
 Usage: anime-cli -q "QUERY" [-e NUMBER] [-b NUMBER] [-r NUMBER] [-n] [-h]
 
 Options:                               
--q, --query         "QUERY" Query to run
+-q, --query         QUERY   Query to run
 -e, --episode       NUMBER  Episode number
 -b, --batch         NUMBER  Download episodes from -e up to -b
 -r, --resolution    NUMBER  Specifies resolution, default is 720, put 0 in order to remove resolution from search
@@ -20,7 +20,7 @@ $ anime-cli -q "steins gate 0" -e 1
 [HorribleSubs] Steins Gate 0 - 01 [720p].mkv": 2.23 MB / 322.02 MB [>--------] 0.69 % 1.05 MB/s 5m
 ```
 ```
-$ anime-cli -q "unkown anime" -e 14
+$ anime-cli -q "unknown anime" -e 14
 Could not find any result for this query.
 ```
 ```
@@ -31,6 +31,8 @@ $ anime-cli -q "Sakamoto Desu ga" -b 12
 [HorribleSubs] Sakamoto desu ga - 04 [720p].mkv: 329.07 MB / 329.07 MB [===========>--------------] 100.00 % 4.10 MB/s
 ...
 ```
+
+If you've chosen to use MPV, as soon as you start downloading, MPV will open and begin playing the media file. If you're downloading multiple files at once, it will automatically move onto the next movie when the previous movie ends.
 
 ## Pre-requisites
 In order to play videos you will need mpv.
