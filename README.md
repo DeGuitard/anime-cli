@@ -1,17 +1,17 @@
 # anime-cli
-CLI to find, download and stream anime.
+Command Line Interface to find, download, and stream anime.
 
 ## Usage
 ```
-Usage: anime-cli -q QUERY [-e NUMBER] [-b NUMBER] [-r NUMBER] [-n] [-h]
+Usage: anime-cli -q "QUERY" [-e NUMBER] [-b NUMBER] [-r NUMBER] [-n] [-h]
 
 Options:                               
--q, --query QUERY       Query to run
--e, --episode NUMBER    Episode number
--b, --batch NUMBER      Download episodes from -e up to -b
--r, --resolution NUMBER Specifies resolution, default is 720, put 0 in order to remove resolution from search
--n, --noshow            Do not automatically open media player
--h, --help              print this help menu
+-q, --query         "QUERY" Query to run
+-e, --episode       NUMBER  Episode number
+-b, --batch         NUMBER  Download episodes from -e up to -b
+-r, --resolution    NUMBER  Specifies resolution, default is 720, put 0 in order to remove resolution from search
+-n, --noshow                Do not automatically open media player
+-h, --help                  Print this help menu
 ```
 
 #### Examples:
@@ -34,6 +34,7 @@ $ anime-cli -q "Sakamoto Desu ga" -b 12
 
 ## Pre-requisites
 In order to play videos you will need mpv.
+
 However, if you do not wish to autoplay videos, you can do
 `cargo build --release --no-default-features`
 
@@ -57,11 +58,11 @@ libmpv.dll.a -> $(project)/target/debug/deps/       and rename to mpv.lib
 mpv-1.dll    -> where `anime-cli.exe` is
 
 ## Disclaimer
-When downloading anime, users are subject to country-specific software distribution laws. anime-dl is not designed to enable illegal activity. We do not promote piracy nor do we allow it under any circumstances. You should own an original copy of every content downloaded through this tool. Please take the time to review copyright and video distribution laws and/or policies for your country before proceeding.
+When downloading anime, users are subject to country-specific software distribution laws. anime-cli is not designed to enable illegal activity. We do not promote piracy nor do we allow it under any circumstances. You should own an original copy of every content downloaded through this tool. Please take the time to review copyright and video distribution laws and/or policies for your country before proceeding.
 
 ## Todo
 * Support more media viewers such as VLC (if you compile without mpv it'll open in your default media player)
-* Make this work on android
+* Make this work on android (You can install a linux environment and use this tool to just download)
 * A search only function as well as select correct anime from list
 * Make an anime log so you can resume where you left off
 * Add a graphical interface (opens a terminal with inputs, close enough)

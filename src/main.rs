@@ -36,12 +36,12 @@ fn print_usage(program: &str, opts: Options) {
     ===================================\n\
     Helpful Tips:                      \n\
     Try to keep your anime name simple \n\
-    e.g. sakamoto                      \n\
+    and use quotes when you use -q     \n\
+    e.g. \"sakamoto\"                  \n\
                                        \n\
     Common resolutions 480/720/1080    \n\
                                        \n\
     Batch end number means last episode\n\
-                                       \n\
     in a range of episodes             \n\
       e.g. episode ------------> batch \n\
       everything from 1 -------> 10    \n\
