@@ -66,24 +66,17 @@ fn main() {
     //println!("{}", query);
     let episode: Option<u16> = match matches.opt_str("e") {
         Some(ep) => Some(parse_number(ep)),
-        None => Some(1),
+        None => None
     };
 
-    let mut batch: Option<u16> = episode;
-
-    if batching {
-        batch = match matches.opt_str("b") {
-            Some(ep) => Some(parse_number(ep)),
-            None => batch,
-        };
-    }
+    let batch = matches.opt_str("b").map(|ep|parse_number(ep));
 
     let mut packlist = vec![];
     let mut botlist = vec![];
 
-    for i in episode.unwrap()..batch.unwrap() + 1 {
+    for i in episode.unwrap_or(0)..batch.unwrap_or(0) + 1 {
         println!("Searching for {} episode {}", query, i);
-        let package = match anime_find::find_package(&query, &Some(i)) {
+        let package = match anime_find::find_package(&query, &episode.or(batch).and(Some(i))) {
             Ok(p) => p,
             Err(e) => {
                 eprintln!("{}", e);
