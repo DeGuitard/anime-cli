@@ -2,7 +2,7 @@
 name = "anime-cli"
 version = "0.2.0"
 description = "CLI to find, download, and stream anime."
-authors = ["Daniel Pham <***REMOVED***>, Vianney Dupoy de Guitard <vianney@n4v1.com>"]
+authors = ["exKitsune, Vianney Dupoy de Guitard <vianney@n4v1.com>"]
 license = "GPL-3.0"
 edition = "2018"
 homepage = "https://github.com/exKitsune/anime-cli"
