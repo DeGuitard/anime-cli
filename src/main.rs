@@ -204,11 +204,15 @@ fn main() {
         let pb_message;
         match terminal_dimensions {
           Some((w, _)) => {
-              let acceptable_length = w / 2 - 4; // -4 because I add "..."
+              let acceptable_length = w / 2;
               if &dccpackages[i].filename.len() > &acceptable_length { // trim the filename
                   let first_half = &dccpackages[i].filename[..dccpackages[i].filename.char_indices().nth(acceptable_length/2).unwrap().0];
                   let second_half = &dccpackages[i].filename[dccpackages[i].filename.char_indices().nth_back(acceptable_length/2).unwrap().0..];
-                  pb_message = format!("{}...{}: ", first_half, second_half);
+                  if acceptable_length < 50 {
+                      pb_message = format!("{}...{}: ", first_half, second_half);
+                  } else {
+                      pb_message = format!("...{}: ", second_half);
+                  }
               } else {
                   pb_message = format!("{}: ", dccpackages[i].filename);
               }
