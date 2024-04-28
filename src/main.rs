@@ -197,47 +197,73 @@ fn main() {
     let mut multi_bar = MultiBar::new();
     let mut multi_bar_handles = vec![];
     let (status_bar_sender, status_bar_receiver) = channel();
+
     for i in 0..dccpackages.len() { //create bars for all our downloads
         let (sender, receiver) = channel();
         let handle;
 
         let pb_message;
+        let mut safe_to_spawn_bar = true;
         match terminal_dimensions {
-          Some((w, _)) => {
-              let acceptable_length = w / 2;
-              if &dccpackages[i].filename.len() > &acceptable_length { // trim the filename
-                  let first_half = &dccpackages[i].filename[..dccpackages[i].filename.char_indices().nth(acceptable_length/2).unwrap().0];
-                  let second_half = &dccpackages[i].filename[dccpackages[i].filename.char_indices().nth_back(acceptable_length/2).unwrap().0..];
-                  if acceptable_length < 50 {
-                      pb_message = format!("{}...{}: ", first_half, second_half);
-                  } else {
-                      pb_message = format!("...{}: ", second_half);
-                  }
-              } else {
-                  pb_message = format!("{}: ", dccpackages[i].filename);
-              }
-          },
-            None => pb_message = format!("{}: ", dccpackages[i].filename),
+            Some((w, _)) => {
+                let acceptable_length = w / 2;
+                if &dccpackages[i].filename.len() > &acceptable_length { // trim the filename
+                    let first_half = &dccpackages[i].filename[..dccpackages[i].filename.char_indices().nth(acceptable_length / 2).unwrap().0];
+                    let second_half = &dccpackages[i].filename[dccpackages[i].filename.char_indices().nth_back(acceptable_length / 2).unwrap().0..];
+                    if acceptable_length > 50 {
+                        pb_message = format!("{}...{}: ", first_half, second_half);
+                    } else if acceptable_length > 35 {
+                        pb_message = format!("...{}: ", second_half);
+                    } else {
+                        pb_message = format!("{} added to list", dccpackages[i].filename);
+                        safe_to_spawn_bar = false;
+                    }
+                } else {
+                    pb_message = format!("{}: ", dccpackages[i].filename);
+                }
+            },
+            None => {
+                pb_message = format!("{} added to list", dccpackages[i].filename);
+                safe_to_spawn_bar = false;
+            },
         };
-
-        let mut progress_bar = multi_bar.create_bar(dccpackages[i].sizekbits as u64);
-        progress_bar.set_units(Units::Bytes);
-        progress_bar.message(&pb_message);
+        let progress_bar;
+        if safe_to_spawn_bar {
+            let mut pb = multi_bar.create_bar(dccpackages[i].sizekbits as u64);
+            pb.set_units(Units::Bytes);
+            pb.message(&pb_message);
+            progress_bar = Some(pb);
+        } else {
+            progress_bar = None;
+            multi_bar.println(&pb_message);
+        }
 
         let status_bar_sender_clone = status_bar_sender.clone();
         handle = thread::spawn(move || { // create an individual thread for each bar in the multibar with its own i/o
-            update_bar(&mut progress_bar, receiver, status_bar_sender_clone);
+            update_bar(progress_bar, receiver, status_bar_sender_clone);
         });
 
         channel_senders.push(sender);
         multi_bar_handles.push(handle);
     }
 
-    let mut status_bar = multi_bar.create_bar(dccpackages.len() as u64);
-    status_bar.set_units(Units::Default);
-    status_bar.message(&format!("{}: ", "Waiting..."));
+    let mut status_bar = None;
+    match terminal_dimensions {
+        Some((w,_)) => {
+            let acceptable_length = w / 2;
+            if acceptable_length > 35 {
+                let mut sb = multi_bar.create_bar(dccpackages.len() as u64);
+                sb.set_units(Units::Default);
+                sb.message(&format!("{}: ", "Waiting..."));
+                status_bar = Some(sb);
+            }
+        },
+
+        None => { },
+    }
+
     let status_bar_handle = thread::spawn(move || {
-        update_status_bar(&mut status_bar, status_bar_receiver);
+        update_status_bar(status_bar, status_bar_receiver);
     });
     multi_bar_handles.push(status_bar_handle);
 
@@ -280,59 +306,106 @@ fn main() {
     multi_bar_handles.into_iter().for_each(|handle| handle.join().unwrap());
 }
 
-fn update_status_bar(progress_bar: &mut ProgressBar<Pipe>, receiver: Receiver<String>) {
-    progress_bar.tick();
-    let mut progress = match receiver.recv() {
-        Ok(p) => p,
-        Err(_) => {
-            eprintln!("Error updating status bar");
-            exit(1);
-        },
-    };
-
-    while !progress.eq("Success") {
-        progress_bar.tick();
-        if progress.eq("Episode Finished Downloading") {
-            progress_bar.inc();
-        }
-
-        progress_bar.message(&format!("{} ", progress));
-        progress = match receiver.recv() {
+fn update_status_bar(progress_bar: Option<ProgressBar<Pipe>>, receiver: Receiver<String>) {
+    if progress_bar.is_some() {
+        let mut pb = progress_bar.unwrap();
+        pb.tick();
+        let mut progress = match receiver.recv() {
             Ok(p) => p,
             Err(_) => {
                 eprintln!("Error updating status bar");
                 exit(1);
             },
         };
+
+        while !progress.eq("Success") {
+            pb.tick();
+            if progress.eq("Episode Finished Downloading") {
+                pb.inc();
+            }
+
+            pb.message(&format!("{} ", progress));
+            progress = match receiver.recv() {
+                Ok(p) => p,
+                Err(_) => {
+                    eprintln!("Error updating status bar");
+                    exit(1);
+                },
+            };
+        }
+        pb.message(&format!("{} ", progress));
+        pb.tick();
+        pb.finish();
+    } else {
+        let mut progress = match receiver.recv() {
+            Ok(p) => p,
+            Err(_) => {
+                eprintln!("Error updating status");
+                exit(1);
+            },
+        };
+
+        while !progress.eq("Success") {
+            println!("{} ", progress);
+            progress = match receiver.recv() {
+                Ok(p) => p,
+                Err(_) => {
+                    eprintln!("Error updating status");
+                    exit(1);
+                },
+            };
+        }
+
+        println!("{} ", progress);
     }
-    progress_bar.message(&format!("{} ", progress));
-    progress_bar.tick();
-    progress_bar.finish();
 }
 
-fn update_bar(progress_bar: &mut ProgressBar<Pipe>, receiver: Receiver<i64>, status_bar_sender: Sender<String>) {
-    progress_bar.tick();
-    let mut progress = match receiver.recv() {
-        Ok(p) => p,
-        Err(_) => {
-            eprintln!("Error updating progress bar");
-            exit(1);
-        },
-    };
-    //println!("{} progress, progress);
-    while progress > 0 {
-        progress_bar.set(progress as u64);
-        progress = match receiver.recv() {
+fn update_bar(progress_bar: Option<ProgressBar<Pipe>>, receiver: Receiver<i64>, status_bar_sender: Sender<String>) {
+    if progress_bar.is_some() {
+        let mut pb = progress_bar.unwrap();
+        pb.tick();
+
+        let mut progress = match receiver.recv() {
             Ok(p) => p,
             Err(_) => {
                 eprintln!("Error updating progress bar");
                 exit(1);
             },
         };
+
+        while progress > 0 {
+            pb.set(progress as u64);
+
+            progress = match receiver.recv() {
+                Ok(p) => p,
+                Err(_) => {
+                    eprintln!("Error updating progress bar");
+                    exit(1);
+                },
+            };
+        }
+        pb.finish();
+    } else {
+        let mut progress = match receiver.recv() {
+            Ok(p) => p,
+            Err(_) => {
+                eprintln!("Error updating progress bar");
+                exit(1);
+            },
+        };
+
+        while progress > 0 {
+            progress = match receiver.recv() {
+                Ok(p) => p,
+                Err(_) => {
+                    eprintln!("Error updating progress bar");
+                    exit(1);
+                },
+            };
+        }
     }
 
     status_bar_sender.send("Episode Finished Downloading".to_string()).unwrap();
-    progress_bar.finish();
 }
 
 fn parse_number(str_num: String) -> u16 {

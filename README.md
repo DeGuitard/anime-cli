@@ -14,6 +14,8 @@ Options:
 -h, --help                  Print this help menu
 ```
 
+Calling `anime-cli` without any flags and arguments or double clicking the executable (if you're on Windows) will cause it to prompt the user for inputs.
+
 #### Examples:
 ```
 $ anime-cli -q "steins gate 0" -e 1

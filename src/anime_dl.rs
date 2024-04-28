@@ -173,7 +173,6 @@ pub fn connect_and_download(request: IRCRequest, channel_senders: Vec<Sender<i64
                         }
                     }
                     if !resume {
-                        //let mut progress_bar = multi_bar.create_bar(requests[i].file_size as u64);
                         let req = requests[i].clone();
                         let sender = channel_senders[i].clone();
                         let path = dir_path.clone();
@@ -187,7 +186,6 @@ pub fn connect_and_download(request: IRCRequest, channel_senders: Vec<Sender<i64
                 }
                 if resume && RESUME_REGEX.is_match(msg){
                     status_bar_sender.send(format!("Attempting to resume download for {}", requests[i].filename)).unwrap();
-                    //let mut progress_bar = multi_bar.create_bar(requests[i].file_size as u64);
                     let req = requests[i].clone();
                     let sender = channel_senders[i].clone();
                     let path = dir_path.clone();
