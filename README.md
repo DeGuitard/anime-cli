@@ -3,7 +3,7 @@ CLI to find, download and stream anime.
 
 ## Usage
 ```
-Usage: anime-cli -q QUERY [-e NUMBER] [-b NUMBER] [-n] [-h]
+Usage: anime-cli -q QUERY [-e NUMBER] [-b NUMBER] [-r NUMBER] [-n] [-h]
 
 Options:                               
 -q, --query QUERY       Query to run
