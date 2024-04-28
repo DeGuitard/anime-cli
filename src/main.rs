@@ -125,10 +125,14 @@ fn main() {
 
     } else {
         println!("Welcome to anime-cli");
-        println!("Default resolution: 720 | episode: None | batch = episode");
+        println!("Default resolution: None | episode: None | batch = episode");
+        println!("Resolution shortcut: 1 => 480p | 2 => 720p | 3 => 1080p");
         query = get_cli_input("Anime/Movie name: ");
         resolution =  match parse_number(get_cli_input("Resolution: ")) {
-            0 => Some(720),
+            0 => None,
+            1 => Some(480),
+            2 => Some(720),
+            3 => Some(1080),
             r => Some(r),
         };
         episode = match parse_number(get_cli_input("Episode number: ")) {
@@ -136,7 +140,7 @@ fn main() {
             e => Some(e),
         };
         batch = match parse_number(get_cli_input("Batch Ep End Number: ")) {
-            0 => None,
+            0 => { if episode.is_some() { episode } else { None } },
             b => Some(b),
         };
     }
