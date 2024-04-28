@@ -198,19 +198,19 @@ fn main() {
     let mut multi_bar_handles = vec![];
     let (status_bar_sender, status_bar_receiver) = channel();
 
+    let mut safe_to_spawn_bar = true; // Even if one bar is safe to spawn, sending stdout outputs will interfere with the bars
     for i in 0..dccpackages.len() { //create bars for all our downloads
         let (sender, receiver) = channel();
         let handle;
 
         let pb_message;
-        let mut safe_to_spawn_bar = true;
         match terminal_dimensions {
             Some((w, _)) => {
                 let acceptable_length = w / 2;
                 if &dccpackages[i].filename.len() > &acceptable_length { // trim the filename
                     let first_half = &dccpackages[i].filename[..dccpackages[i].filename.char_indices().nth(acceptable_length / 2).unwrap().0];
                     let second_half = &dccpackages[i].filename[dccpackages[i].filename.char_indices().nth_back(acceptable_length / 2).unwrap().0..];
-                    if acceptable_length > 50 {
+                    if acceptable_length > 50 { // 50 and 35 are arbitrary numbers
                         pb_message = format!("{}...{}: ", first_half, second_half);
                     } else if acceptable_length > 35 {
                         pb_message = format!("...{}: ", second_half);
@@ -233,7 +233,7 @@ fn main() {
             pb.set_units(Units::Bytes);
             pb.message(&pb_message);
             progress_bar = Some(pb);
-        } else {
+        } else { // If we can't spawn a bar, we just issue normal stdout updates
             progress_bar = None;
             multi_bar.println(&pb_message);
         }
@@ -248,18 +248,11 @@ fn main() {
     }
 
     let mut status_bar = None;
-    match terminal_dimensions {
-        Some((w,_)) => {
-            let acceptable_length = w / 2;
-            if acceptable_length > 35 {
-                let mut sb = multi_bar.create_bar(dccpackages.len() as u64);
-                sb.set_units(Units::Default);
-                sb.message(&format!("{}: ", "Waiting..."));
-                status_bar = Some(sb);
-            }
-        },
-
-        None => { },
+    if safe_to_spawn_bar {
+        let mut sb = multi_bar.create_bar(dccpackages.len() as u64);
+        sb.set_units(Units::Default);
+        sb.message(&format!("{}: ", "Waiting..."));
+        status_bar = Some(sb);
     }
 
     let status_bar_handle = thread::spawn(move || {
@@ -307,16 +300,18 @@ fn main() {
 }
 
 fn update_status_bar(progress_bar: Option<ProgressBar<Pipe>>, receiver: Receiver<String>) {
+    let reader = |num: Result<String, _>, msg: &str| { match num {
+        Ok(p) => p,
+        Err(_) => {
+            eprintln!("{}", msg);
+            exit(1);
+        },
+    }};
+
     if progress_bar.is_some() {
         let mut pb = progress_bar.unwrap();
         pb.tick();
-        let mut progress = match receiver.recv() {
-            Ok(p) => p,
-            Err(_) => {
-                eprintln!("Error updating status bar");
-                exit(1);
-            },
-        };
+        let mut progress = reader(receiver.recv(), "Error updating status bar");
 
         while !progress.eq("Success") {
             pb.tick();
@@ -325,35 +320,17 @@ fn update_status_bar(progress_bar: Option<ProgressBar<Pipe>>, receiver: Receiver
             }
 
             pb.message(&format!("{} ", progress));
-            progress = match receiver.recv() {
-                Ok(p) => p,
-                Err(_) => {
-                    eprintln!("Error updating status bar");
-                    exit(1);
-                },
-            };
+            progress = reader(receiver.recv(), "Error updating status bar");
         }
         pb.message(&format!("{} ", progress));
         pb.tick();
         pb.finish();
     } else {
-        let mut progress = match receiver.recv() {
-            Ok(p) => p,
-            Err(_) => {
-                eprintln!("Error updating status");
-                exit(1);
-            },
-        };
+        let mut progress = reader(receiver.recv(), "Error updating status");
 
         while !progress.eq("Success") {
             println!("{} ", progress);
-            progress = match receiver.recv() {
-                Ok(p) => p,
-                Err(_) => {
-                    eprintln!("Error updating status");
-                    exit(1);
-                },
-            };
+            progress = reader(receiver.recv(), "Error updating status");
         }
 
         println!("{} ", progress);
@@ -361,47 +338,31 @@ fn update_status_bar(progress_bar: Option<ProgressBar<Pipe>>, receiver: Receiver
 }
 
 fn update_bar(progress_bar: Option<ProgressBar<Pipe>>, receiver: Receiver<i64>, status_bar_sender: Sender<String>) {
+    let reader = |num: Result<i64, _>, msg: &str| { match num {
+        Ok(p) => p,
+        Err(_) => {
+            eprintln!("{}", msg);
+            exit(1);
+        },
+    }};
+
     if progress_bar.is_some() {
         let mut pb = progress_bar.unwrap();
         pb.tick();
 
-        let mut progress = match receiver.recv() {
-            Ok(p) => p,
-            Err(_) => {
-                eprintln!("Error updating progress bar");
-                exit(1);
-            },
-        };
+        let mut progress = reader(receiver.recv(), "Error updating progress bar");
 
         while progress > 0 {
             pb.set(progress as u64);
 
-            progress = match receiver.recv() {
-                Ok(p) => p,
-                Err(_) => {
-                    eprintln!("Error updating progress bar");
-                    exit(1);
-                },
-            };
+            progress = reader(receiver.recv(), "Error updating progress bar");
         }
         pb.finish();
     } else {
-        let mut progress = match receiver.recv() {
-            Ok(p) => p,
-            Err(_) => {
-                eprintln!("Error updating progress bar");
-                exit(1);
-            },
-        };
+        let mut progress = reader(receiver.recv(), "Error updating progress");
 
         while progress > 0 {
-            progress = match receiver.recv() {
-                Ok(p) => p,
-                Err(_) => {
-                    eprintln!("Error updating progress bar");
-                    exit(1);
-                },
-            };
+            progress = reader(receiver.recv(), "Error updating progress");
         }
     }
 
