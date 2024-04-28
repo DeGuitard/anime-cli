@@ -22,6 +22,9 @@ fn main() {
     let mut opts = Options::new();
     opts.reqopt("q", "query", "Query to run", "QUERY")
         .optopt("e", "episode", "Episode number", "NUMBER")
+        .optopt("b", "batch", "Batch end number", "NUMBER")
+        .optopt("r", "resolution", "Resolution", "NUMBER")
+        .optflag("n", "noshow", "No auto viewer")
         .optflag("h", "help", "print this help menu");
 
     // Unfortunately, cannot use getopts to check for a single optional flag
@@ -29,6 +32,14 @@ fn main() {
     if args.contains(&"-h".to_string()) || args.contains(&"--help".to_string()) {
         print_usage(&program, opts);
         exit(0);
+    }
+    let mut batching = false;
+    if args.contains(&"-b".to_string()) || args.contains(&"--batch".to_string()) {
+        batching = true;
+    }
+    let mut noshow = false;
+    if args.contains(&"-n".to_string()) || args.contains(&"--noshow".to_string()) {
+        noshow = true;
     }
 
     let matches = match opts.parse(&args[1..]) {
@@ -40,35 +51,87 @@ fn main() {
         }
     };
 
-    let query = matches.opt_str("q").unwrap();
+    let resolution: Option<u16> = match matches.opt_str("r").as_ref().map(String::as_str) {
+        Some("0") => None,
+        Some(ep) => Some(parse_number(String::from(ep))),
+        None => Some(720),
+    };
+
+    let queryres: String = match resolution {
+        Some(x) => format!(" {}", x),
+        None => "".to_string(),
+    };
+
+    let query = matches.opt_str("q").unwrap() + queryres.as_str();
+    //println!("{}", query);
     let episode: Option<u16> = match matches.opt_str("e") {
-        Some(ep) => Some(parse_episode(ep)),
-        None => None,
+        Some(ep) => Some(parse_number(ep)),
+        None => Some(1),
     };
-    let package = match anime_find::find_package(&query, &episode) {
-        Ok(p) => p,
-        Err(e) => {
-            eprintln!("{}", e);
-            exit(1);
-        }
-    };
+
+    let mut batch: Option<u16> = episode;
+
+    if batching {
+        batch = match matches.opt_str("b") {
+            Some(ep) => Some(parse_number(ep)),
+            None => batch,
+        };
+    }
+
+    let mut packlist = vec![];
+    let mut botlist = vec![];
+
+    for i in episode.unwrap()..batch.unwrap() + 1 {
+        println!("Searching for {} episode {}", query, i);
+        let package = match anime_find::find_package(&query, &Some(i)) {
+            Ok(p) => p,
+            Err(e) => {
+                eprintln!("{}", e);
+                exit(1);
+            }
+        };
+
+        packlist.push(package.number.to_string());
+        botlist.push(package.bot);
+    }
     let irc_request = anime_dl::IRCRequest {
         server: IRC_SERVER.to_string(),
         channel: IRC_CHANNEL.to_string(),
         nickname: IRC_NICKNAME.to_string(),
-        bot: package.bot,
-        packages: vec![package.number.to_string()],
+        bot: botlist,
+        packages: packlist,
     };
-    match anime_dl::connect_and_download(irc_request, play_video) {
-        Ok(_) => exit(0),
-        Err(e) => {
-            eprintln!("{}", e);
-            exit(1);
-        }
-    };
+    /*
+    println!(
+        "{:?} {:?} {:?} {:?} {:?}",
+        irc_request.server,
+        irc_request.channel,
+        irc_request.nickname,
+        irc_request.bot,
+        irc_request.packages
+    );*/
+
+    if !batching && !noshow {
+        match anime_dl::connect_and_download(irc_request, play_video) {
+            Ok(_) => exit(0),
+            Err(e) => {
+                eprintln!("{}", e);
+                exit(1);
+            }
+        };
+    } else {
+        // batch
+        match anime_dl::connect_and_download(irc_request, do_nothing) {
+            Ok(_) => exit(0),
+            Err(e) => {
+                eprintln!("{}", e);
+                exit(1);
+            }
+        };
+    }
 }
 
-fn parse_episode(episode: String) -> u16 {
+fn parse_number(episode: String) -> u16 {
     match episode.parse::<u16>() {
         Ok(e) => e,
         Err(_) => {
@@ -78,7 +141,13 @@ fn parse_episode(episode: String) -> u16 {
     }
 }
 
-fn play_video(filename: String) {
+fn do_nothing(_filename: String) -> thread::JoinHandle<()>{
+    thread::spawn( move || {
+
+    })
+}
+
+fn play_video(filename: String) -> thread::JoinHandle<()>{
     thread::spawn(move || {
         thread::sleep(std::time::Duration::from_secs(5));
         let video_path: &Path = Path::new(&filename);
@@ -111,5 +180,5 @@ fn play_video(filename: String) {
                 video_path.to_str().unwrap()
             );
         }
-    });
+    })
 }

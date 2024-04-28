@@ -14,15 +14,17 @@ use regex::Regex;
 lazy_static! {
     static ref DCC_SEND_REGEX: Regex =
         Regex::new(r#"DCC SEND "?(.*)"? (\d+) (\d+) (\d+)"#).unwrap();
-    static ref PING_REGEX: Regex = Regex::new(r#"PING :\d+"#).unwrap();
+    static ref PING_REGEX: Regex = Regex::new(r#"PING :.*"#).unwrap();
     static ref JOIN_REGEX: Regex = Regex::new(r#"JOIN :#.*"#).unwrap();
+    static ref MODE_REGEX: Regex = Regex::new(r#"MODE .* :\+.*"#).unwrap();
+    //static ref NOTICE_REGEX: Regex = Regex::new(r#"NOTICE .* You already requested"#).unwrap();
 }
 
 pub struct IRCRequest {
     pub server: String,
     pub channel: String,
     pub nickname: String,
-    pub bot: String,
+    pub bot: Vec<String>,
     pub packages: Vec<String>,
 }
 
@@ -33,7 +35,7 @@ struct DCCSend {
     file_size: usize,
 }
 
-pub fn connect_and_download(request: IRCRequest, on_start: fn(String) -> ()) -> Result<(), String> {
+pub fn connect_and_download(request: IRCRequest, on_start: fn(String) -> thread::JoinHandle<()>) -> Result<(), String> {
     let mut download_handles = Vec::new();
     let mut has_joined = false;
     let mut multi_bar = MultiBar::new();
@@ -42,20 +44,29 @@ pub fn connect_and_download(request: IRCRequest, on_start: fn(String) -> ()) -> 
     let mut message_buffer = String::new();
     while download_handles.len() < request.packages.len() {
         let message = read_next_message(&mut stream, &mut message_buffer).unwrap();
-
+        //println!("{}", message);
         if PING_REGEX.is_match(&message) {
             let pong = message.replace("PING", "PONG");
             stream.write(pong.as_bytes()).unwrap();
             if !has_joined {
                 let channel_join_cmd = format!("JOIN #{}\r\n", request.channel);
                 stream.write(channel_join_cmd.as_bytes()).unwrap();
-                has_joined = true;
             }
         }
         if JOIN_REGEX.is_match(&message) {
+            has_joined = true;
+            let mut i = 0;
             for package in &request.packages {
-                let xdcc_send_cmd = format!("PRIVMSG {} :xdcc send #{}\r\n", request.bot, package);
+                let xdcc_send_cmd =
+                    format!("PRIVMSG {} :xdcc send #{}\r\n", &request.bot[i], package);
                 stream.write(xdcc_send_cmd.as_bytes()).unwrap();
+                i += 1;
+            }
+        }
+        if MODE_REGEX.is_match(&message) {
+            if !has_joined {
+                let channel_join_cmd = format!("JOIN #{}\r\n", request.channel);
+                stream.write(channel_join_cmd.as_bytes()).unwrap();
             }
         }
         if DCC_SEND_REGEX.is_match(&message) {
@@ -104,7 +115,7 @@ fn parse_dcc_send(message: &String) -> DCCSend {
     let captures = DCC_SEND_REGEX.captures(&message).unwrap();
     let ip_number = captures[2].parse::<u32>().unwrap();
     DCCSend {
-        filename: captures[1].to_string(),
+        filename: captures[1].to_string().replace("\"",""),
         ip: IpAddr::V4(Ipv4Addr::from(ip_number)),
         port: captures[3].to_string(),
         file_size: captures[4].parse::<usize>().unwrap(),
@@ -114,7 +125,7 @@ fn parse_dcc_send(message: &String) -> DCCSend {
 fn download_file(
     request: DCCSend,
     progress_bar: &mut ProgressBar<Pipe>,
-    on_start: fn(String) -> (),
+    on_start: fn(String) -> thread::JoinHandle<()>,
 ) -> std::result::Result<(), std::io::Error> {
     let filename = request.filename.to_string();
     let mut file = File::create(&request.filename)?;
@@ -123,7 +134,7 @@ fn download_file(
     let mut progress: usize = 0;
     progress_bar.set_units(Units::Bytes);
     progress_bar.message(&format!("{}: ", &request.filename));
-    on_start(filename);
+    let videohandle = on_start(filename);
 
     while progress < request.file_size {
         let count = stream.read(&mut buffer[..])?;
@@ -134,5 +145,7 @@ fn download_file(
     progress_bar.finish();
     stream.shutdown(Shutdown::Both)?;
     file.flush()?;
+
+    videohandle.join().unwrap();
     Ok(())
 }
