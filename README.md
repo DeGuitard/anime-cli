@@ -35,6 +35,18 @@ $ anime-cli -q "Sakamoto Desu ga" -b 12
 [HorribleSubs] Sakamoto desu ga - 04 [720p].mkv: 144.81 MB / 329.33 MB [===========>--------------]  43.97 % 4.10 MB/s
 ...
 ```
+```
+$ anime-cli -x
+Use arrow keys to navigate
+Enter to Select | Esc to Quit | Del to Delete | S to Show Hidden Items: false
+If you have mpv, hit Q to play all media in current folder
+\anime
+List of animes | Page 1 of 1:
+[█] attack on titan 720 | 24 episode(s)
+[ ] sakamoto 720 | 12 episode(s)
+[ ] vinland saga 1080 | 14 episode(s)
+[ ] Your Name | 1 episode(s)
+```
 
 If you've chosen to use MPV, as soon as you start downloading, MPV will open and begin playing the media file. If you're downloading multiple files at once, it will automatically move onto the next movie when the previous movie ends.
 
@@ -70,6 +82,6 @@ When downloading anime, users are subject to country-specific software distribut
 * Support more media viewers such as VLC (if you compile without mpv it'll open in your default media player)
 * Make this work on android (You can install a linux environment and use this tool to just download)
 * A search only function as well as select correct anime from list
-* A watch only mode for already downloaded movies
+* A watch only mode for already downloaded movies (Done! use -x)
 * Make an anime log so you can resume where you left off
 * Add a graphical interface (opens a terminal with inputs, close enough)
