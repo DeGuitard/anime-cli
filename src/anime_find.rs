@@ -7,9 +7,12 @@ use std::result::Result;
 
 const API_URL: &str = "https://api.nibl.co.uk/nibl";
 
+#[derive(Clone)]
 pub struct DCCPackage {
     pub number: i32,
     pub bot: String,
+    pub filename: String,
+    pub sizekbits: i64,
 }
 
 pub fn find_package(query: &String, episode: &Option<u16>) -> Result<DCCPackage, String> {
@@ -17,10 +20,12 @@ pub fn find_package(query: &String, episode: &Option<u16>) -> Result<DCCPackage,
         Ok(p) => p,
         Err(e) => return Err(format!("Error while fetching results: {}", e)),
     };
+
     let first_package = match packages.first() {
         Some(p) => p,
         None => return Err("Could not find any result for this query.".to_string()),
     };
+
     let bot_name = match find_bot_name(&first_package.bot_id) {
         Some(b) => b,
         None => return Err("Results found, but unknown bot.".to_string()),
@@ -29,6 +34,8 @@ pub fn find_package(query: &String, episode: &Option<u16>) -> Result<DCCPackage,
     Ok(DCCPackage {
         bot: bot_name.to_string(),
         number: first_package.number,
+        filename: first_package.name.clone(),
+        sizekbits: first_package.sizekbits,
     })
 }
 
@@ -89,4 +96,7 @@ struct SearchResult {
 struct Package {
     bot_id: i64,
     number: i32,
+    name: String,
+    _size: String,
+    sizekbits: i64,
 }
